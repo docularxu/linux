@@ -529,7 +529,6 @@
 			pinctrl-names = "default", "idle";
 			pinctrl-0 = <&sdio_pmx_func &sdio_clk_cfg_func &sdio_cfg_func>;
 			pinctrl-1 = <&sdio_pmx_idle &sdio_clk_cfg_idle &sdio_cfg_idle>;
-
 		};
 
 		i2c0: i2c@f7100000 {
