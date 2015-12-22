@@ -23,14 +23,17 @@
 #include <linux/mfd/hi655x-pmic.h>
 #include <linux/regmap.h>
 
-
 static const struct of_device_id of_hi655x_pmic_child_match_tbl[] = {
 	{ .compatible = "hisilicon,hi655x-regulator-pmic", },
+	{ .compatible = "hisilicon,hi655x-powerkey", },
+	{ .compatible = "hisilicon,hi655x-usbvbus", },
+	{ .compatible = "hisilicon,hi655x-coul", },
+	{ .compatible = "hisilicon,hi655x-pmu-rtc", },
 	{},
 };
 
 static const struct of_device_id of_hi655x_pmic_match_tbl[] = {
-	{ .compatible = "hisilicon,hi655x-pmic", },
+	{ .compatible = "hisilicon,hi655x-pmic-driver", },
 	{},
 };
 
