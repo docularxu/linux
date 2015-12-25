@@ -535,6 +535,14 @@ config UID_CPUTIME
 	help
 	  Per UID based cpu time statistics exported to /proc/uid_cputime
 
+config HI6220_SYSCFG
+	bool "Hisilicon HI6220 System Configuration driver"
+	depends on ARCH_HISI
+	default y
+	help
+	  Hisilicon HI6220 uses some registers to configure some chip hosts to
+          work or not, e.g. disable the UART hosts reset and let's them work.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
