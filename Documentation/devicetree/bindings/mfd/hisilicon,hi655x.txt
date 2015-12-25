@@ -1,0 +1,17 @@
+Hisilicon hi655x Power Management Integrated Circuit (PMIC)
+
+Required properties:
+- compatible: Should be "hisilicon,hi655x-pmic"
+- reg: Base address of PMIC on hi6220 soc
+- interrupt-controller: Hi655x has internal IRQs (has own IRQ domain).
+- pmic-gpios: The gpio used by pmic irq.
+
+Example:
+        pmic: pmic@f8000000 {
+                compatible = "hisilicon,hi655x-pmic";
+                reg = <0x0 0xf8000000 0x0 0x1000>;
+                #interrupt-cells = <2>;
+                interrupt-controller;
+                pmic-gpios = <&gpio_pmu_irq_n>;
+                status = "okay";
+        }
