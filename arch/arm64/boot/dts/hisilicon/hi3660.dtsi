@@ -355,7 +355,6 @@
 			hisi,rst-syscon = <&crg_ctrl>;
 		};
 
-
 		pctrl: pctrl@e8a09000 {
 			compatible = "hisilicon,hi3660-pctrl", "syscon";
 			reg = <0x0 0xe8a09000 0x0 0x2000>;
@@ -391,7 +390,6 @@
 			compatible = "hisilicon,hi3660-iomcu", "syscon";
 			reg = <0x0 0xffd7e000 0x0 0x1000>;
 			#clock-cells = <1>;
-
 		};
 
 		iomcu_rst: iomcu_rst_controller {
@@ -410,43 +408,42 @@
 
 		stub_clock: stub_clock {
 			compatible = "hisilicon,hi3660-stub-clk";
-			reg = <0x0 0xe896b500 0x0 0x0100>;
+			reg = <0x0 0xe896b000 0x0 0x1000>;
 			#clock-cells = <1>;
 			mbox-names = "mbox-tx";
 			mboxes = <&mailbox 13 3 0>;
 		};
 
-		dual_timer0: timer@fff14000 {
+		timer0: timer@fff14000 {
 			compatible = "arm,sp804", "arm,primecell";
 			reg = <0x0 0xfff14000 0x0 0x1000>;
-			interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>,
-				     <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <0 48 4>, <0 49 4>;
 			clocks = <&crg_ctrl HI3660_OSC32K>,
 				 <&crg_ctrl HI3660_OSC32K>,
 				 <&crg_ctrl HI3660_OSC32K>;
 			clock-names = "timer1", "timer2", "apb_pclk";
 		};
 
-		i2c0: i2c@ffd71000 {
+		i2c0: i2c@FFD71000 {
 			compatible = "snps,designware-i2c";
-			reg = <0x0 0xffd71000 0x0 0x1000>;
-			interrupts = <GIC_SPI 118 IRQ_TYPE_LEVEL_HIGH>;
-			#address-cells = <1>;
-			#size-cells = <0>;
+			reg = <0x0 0xFFD71000 0x0 0x1000>;
+			interrupts = <0 118 4>;
+                        #address-cells = <1>;
+                        #size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C0>;
 			resets = <&iomcu_rst HI3660_RST_I2C0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c0_pmx_func &i2c0_cfg_func>;
-			status = "disabled";
+			status = "ok";
 		};
 
-		i2c1: i2c@ffd72000 {
+		i2c1: i2c@FFD72000 {
 			compatible = "snps,designware-i2c";
-			reg = <0x0 0xffd72000 0x0 0x1000>;
-			interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
-			#address-cells = <1>;
-			#size-cells = <0>;
+			reg = <0x0 0xFFD72000 0x0 0x1000>;
+			interrupts = <0 119 4>;
+                        #address-cells = <1>;
+                        #size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C1>;
 			resets = <&iomcu_rst HI3660_RST_I2C1>;
@@ -565,35 +562,35 @@
 			status = "disabled";
 		};
 
-		i2c3: i2c@fdf0c000 {
+		i2c3: i2c@FDF0C000 {
 			compatible = "snps,designware-i2c";
-			reg = <0x0 0xfdf0c000 0x0 0x1000>;
-			interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
-			#address-cells = <1>;
-			#size-cells = <0>;
+			reg = <0x0 0xFDF0C000 0x0 0x1000>;
+			interrupts = <0 81 4>;
+                        #address-cells = <1>;
+                        #size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C3>;
 			resets = <&crg_rst HI3660_RST_I2C3>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c3_pmx_func &i2c3_cfg_func>;
-			status = "disabled";
+			status = "ok";
 		};
 
-		i2c7: i2c@fdf0b000 {
+		i2c7: i2c@FDF0B000 {
 			compatible = "snps,designware-i2c";
-			reg = <0x0 0xfdf0b000 0x0 0x1000>;
-			interrupts = <GIC_SPI 314 IRQ_TYPE_LEVEL_HIGH>;
-			#address-cells = <1>;
-			#size-cells = <0>;
+			reg = <0x0 0xFDF0B000 0x0 0x1000>;
+			interrupts = <0 314 4>;
+                        #address-cells = <1>;
+                        #size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C7>;
 			resets = <&crg_rst HI3660_RST_I2C7>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c7_pmx_func &i2c7_cfg_func>;
-			status = "disabled";
+			status = "ok";
 		};
 
-		uart0: serial@fdf02000 {
+		uart0: uart@fdf02000 {
 			compatible = "arm,pl011", "arm,primecell";
 			reg = <0x0 0xfdf02000 0x0 0x1000>;
 			interrupts = <GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH>;
@@ -1144,7 +1141,7 @@
 			supports-highspeed;
 			card-detect-delay = <200>;
 			reg = <0x0 0xff37f000 0x0 0x1000>;
-			interrupts = <GIC_SPI 139 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <0 139 4>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_SD>,
 				<&crg_ctrl HI3660_HCLK_GATE_SD>;
 			clock-names = "ciu", "biu";
@@ -1153,15 +1150,13 @@
 			cd-gpios = <&gpio25 3 0>;
 			hisilicon,peripheral-syscon = <&sctrl>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&sd_pmx_func
-				     &sd_clk_cfg_func
-				     &sd_cfg_func>;
+			pinctrl-0 = <&sd_pmx_func &sd_clk_cfg_func &sd_cfg_func>;
+			vmmc-supply = <&ldo16>;
+			vqmmc-supply = <&ldo9>;
 			sd-uhs-sdr12;
 			sd-uhs-sdr25;
 			sd-uhs-sdr50;
 			sd-uhs-sdr104;
-			status = "disabled";
-
 			slot@0 {
 				reg = <0x0>;
 				bus-width = <4>;
@@ -1170,10 +1165,10 @@
 		};
 
 		/* SDIO */
-		dwmmc2: dwmmc2@ff3ff000 {
+		dwmmc2: dwmmc2@FF3FF000 {
 			compatible = "hisilicon,hi3660-dw-mshc";
 			reg = <0x0 0xff3ff000 0x0 0x1000>;
-			interrupts = <GIC_SPI 140 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <0 140 4>;
 			num-slots = <1>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_SDIO0>,
 				 <&crg_ctrl HI3660_HCLK_GATE_SDIO0>;
@@ -1183,26 +1178,24 @@
 			supports-highspeed;
 			keep-power-in-suspend;
 			pinctrl-names = "default";
-			pinctrl-0 = <&sdio_pmx_func
-				     &sdio_clk_cfg_func
-				     &sdio_cfg_func>;
+			pinctrl-0 = <&sdio_pmx_func &sdio_clk_cfg_func &sdio_cfg_func>;
 			status = "disabled";
 		};
 
 		tsensor: tsensor {
-			compatible = "hisilicon,hi3660-thermal";
-			reg = <0x0 0xfff30000 0x0 0x1000>;
+			compatible = "hisilicon,thermal-hi3660";
+			mbox-names = "mbox-tx";
+			mboxes = <&mailbox 28 3 0>;
 			#thermal-sensor-cells = <1>;
+			status = "ok";
 		};
 
 		ufs: ufs@ff3b0000 {
 			compatible = "jedec,ufs-1.1", "hisilicon,hi3660-ufs";
-			/* 0: HCI standard */
-			/* 1: UFS SYS CTRL */
-			reg = <0x0 0xff3b0000 0x0 0x1000>,
-				<0x0 0xff3b1000 0x0 0x1000>;
+			reg = <0x0 0xff3b0000 0x0 0x1000>,	/* 0: HCI standard */
+			      <0x0 0xff3b1000 0x0 0x1000>;	/* 1: UFS SYS CTRL */
 			interrupt-parent = <&gic>;
-			interrupts = <GIC_SPI 278 IRQ_TYPE_LEVEL_HIGH>;
+			interrupts = <0 278 4>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_UFSIO_REF>,
 				 <&crg_ctrl HI3660_CLK_GATE_UFSPHY_CFG>;
 			clock-names = "clk_ref", "clk_phy";
@@ -1210,8 +1203,13 @@
 			resets = <&crg_rst HI3660_RST_UFS>,
 				 <&crg_rst HI3660_RST_UFS_ASSERT>;
 			reset-names = "rst", "assert";
+			ufs-hi3660-use-rate-B;
+			ufs-hi3660-broken-fastauto;
+			ufs-hi3660-use-HS-GEAR3;
+			ufs-hi3660-unipro-termination;
+			ufs-hi3660-broken-clk-gate-bypass;
+			status = "ok";
 		};
-
 
 		hub5734_gpio:hub5734_gpio {
 			compatible = "hub5734_gpio";
@@ -1228,7 +1226,7 @@
 			bc_again_flag = <1>;
 
 			clocks = <&crg_ctrl HI3660_CLK_ABB_USB>,
-				 <&crg_ctrl HI3660_ACLK_GATE_USB3OTG>;
+				<&crg_ctrl HI3660_ACLK_GATE_USB3OTG>;
 			clock-names = "clk_usb3phy_ref", "aclk_usb3otg";
 			eye_diagram_param = <0x1c466e3>;
 			eye_diagram_host_param = <0x1c466e3>;
@@ -1253,7 +1251,7 @@
 				sustainable-power = <4500>;
 
 				/* sensor ID */
-				thermal-sensors = <&tsensor 4>;
+				thermal-sensors = <&tsensor 0>;
 
 				trips {
 					threshold: trip-point@0 {
@@ -1280,11 +1278,6 @@
 						contribution = <512>;
 						cooling-device = <&cpu4 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
 					};
-					map2 {
-						trip = <&target>;
-						contribution = <1024>;
-						cooling-device = <&gpu THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
-					};
 				};
 			};
 		};
@@ -1292,11 +1285,12 @@
 		i2s0: hisi_i2s {
 			compatible = "hisilicon,hisi-i2s";
 			reg = <0x0 0xe804f800 0x0 0x400>,
-			      <0x0 0xe804e000 0x0 0x400>;
+				  <0x0 0xe804e000 0x0 0x400>;
 			pinctrl-names = "default";
-			pinctrl-0 = <&i2s2_pmx_func>;
+			pinctrl-0 = <&i2s2_pmx_func &i2s2_cfg_func>;
 			dmas = <&asp_dmac 18 &asp_dmac 19>;
 			dma-names = "rx", "tx";
+			status = "ok";
 			#sound-dai-cells = <0>;
 		};
 
@@ -1330,5 +1324,6 @@
 				sound-dai = <&adv7533>;
 			};
 		};
+
 	};
 };
