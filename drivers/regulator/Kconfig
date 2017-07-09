@@ -274,7 +274,7 @@ config REGULATOR_HI6421V530
 	tristate "HiSilicon Hi6421v530 PMIC voltage regulator support"
 	depends on MFD_HI6421_PMIC && OF
 	help
-	  This driver provides support for the voltage regulators on
+	  This driver provides support for the voltage regulators on the
 	  HiSilicon Hi6421v530 PMU / Codec IC.
 	  Hi6421v530 is a multi-function device which, on regulator part,
 	  provides 5 general purpose LDOs, and all of them come with support
