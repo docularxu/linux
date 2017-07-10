@@ -6,6 +6,7 @@
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/hi3660-clock.h>
+#include <dt-bindings/reset/hisi,hi3660-resets.h>
 #include <dt-bindings/thermal/thermal.h>
 
 / {
@@ -349,8 +350,8 @@
 		};
 
 		crg_rst: crg_rst_controller {
-			compatible = "hisilicon,hi3660-reset";
-			#reset-cells = <2>;
+			compatible = "hisilicon,hi3660-reset-crgctrl";
+			#reset-cells = <1>;
 			hisi,rst-syscon = <&crg_ctrl>;
 		};
 
@@ -393,10 +394,10 @@
 
 		};
 
-		iomcu_rst: reset {
-			compatible = "hisilicon,hi3660-reset";
+		iomcu_rst: iomcu_rst_controller {
+			compatible = "hisilicon,hi3660-reset-iomcu";
+			#reset-cells = <1>;
 			hisi,rst-syscon = <&iomcu>;
-			#reset-cells = <2>;
 		};
 
 		mailbox: mailbox@e896b000 {
@@ -434,7 +435,7 @@
 			#size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C0>;
-			resets = <&iomcu_rst 0x20 3>;
+			resets = <&iomcu_rst HI3660_RST_I2C0>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c0_pmx_func &i2c0_cfg_func>;
 			status = "disabled";
@@ -448,7 +449,7 @@
 			#size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C1>;
-			resets = <&iomcu_rst 0x20 4>;
+			resets = <&iomcu_rst HI3660_RST_I2C1>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c1_pmx_func &i2c1_cfg_func>;
 			status = "ok";
@@ -572,7 +573,7 @@
 			#size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C3>;
-			resets = <&crg_rst 0x78 7>;
+			resets = <&crg_rst HI3660_RST_I2C3>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c3_pmx_func &i2c3_cfg_func>;
 			status = "disabled";
@@ -586,7 +587,7 @@
 			#size-cells = <0>;
 			clock-frequency = <400000>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_I2C7>;
-			resets = <&crg_rst 0x60 14>;
+			resets = <&crg_rst HI3660_RST_I2C7>;
 			pinctrl-names = "default";
 			pinctrl-0 = <&i2c7_pmx_func &i2c7_cfg_func>;
 			status = "disabled";
@@ -1148,7 +1149,7 @@
 				<&crg_ctrl HI3660_HCLK_GATE_SD>;
 			clock-names = "ciu", "biu";
 			clock-frequency = <3200000>;
-			resets = <&crg_rst 0x94 18>;
+			resets = <&crg_rst HI3660_RST_SD>;
 			cd-gpios = <&gpio25 3 0>;
 			hisilicon,peripheral-syscon = <&sctrl>;
 			pinctrl-names = "default";
@@ -1177,7 +1178,7 @@
 			clocks = <&crg_ctrl HI3660_CLK_GATE_SDIO0>,
 				 <&crg_ctrl HI3660_HCLK_GATE_SDIO0>;
 			clock-names = "ciu", "biu";
-			resets = <&crg_rst 0x94 20>;
+			resets = <&crg_rst HI3660_RST_SDIO>;
 			card-detect-delay = <200>;
 			supports-highspeed;
 			keep-power-in-suspend;
@@ -1206,10 +1207,8 @@
 				 <&crg_ctrl HI3660_CLK_GATE_UFSPHY_CFG>;
 			clock-names = "clk_ref", "clk_phy";
 			freq-table-hz = <0 0>, <0 0>;
-			/* offset: 0x84; bit: 12 */
-			/* offset: 0x84; bit: 7  */
-			resets = <&crg_rst 0x84 12>,
-				<&crg_rst 0x84 7>;
+			resets = <&crg_rst HI3660_RST_UFS>,
+				 <&crg_rst HI3660_RST_UFS_ASSERT>;
 			reset-names = "rst", "assert";
 		};
 
