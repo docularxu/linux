@@ -217,7 +217,7 @@
 		phy_pgd_base = <0x0 0x34A78000>;
 	};
 
-	smmu_lpae{
+	smmu_lpae {
 		compatible = "hisi,hisi-smmu-lpae";
 		status = "ok";
 	};
