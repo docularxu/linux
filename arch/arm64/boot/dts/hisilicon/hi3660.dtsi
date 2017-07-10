@@ -1203,7 +1203,7 @@
 			interrupt-parent = <&gic>;
 			interrupts = <GIC_SPI 278 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&crg_ctrl HI3660_CLK_GATE_UFSIO_REF>,
-				<&crg_ctrl HI3660_CLK_GATE_UFSPHY_CFG>;
+				 <&crg_ctrl HI3660_CLK_GATE_UFSPHY_CFG>;
 			clock-names = "clk_ref", "clk_phy";
 			freq-table-hz = <0 0>, <0 0>;
 			/* offset: 0x84; bit: 12 */
