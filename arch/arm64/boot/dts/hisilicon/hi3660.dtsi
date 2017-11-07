@@ -330,6 +330,29 @@
 					  IRQ_TYPE_LEVEL_LOW)>;
 	};
 
+	/* isp start */
+	hisiisp: isp@E8400000 {
+		compatible = "hisilicon,hisi-isp";
+		reg = <0x0 0xe8400000 0x0 0x200000>;
+		interrupts = <0 262 4>, <0 266 4>;
+		pwdn-gpio = <&gpio2 3 1>;
+		reset-gpio = <&gpio6 4 1>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&isp0_pmx_func &isp1_pmx_func &isp0_cfg_func &isp1_cfg_func
+					&cam0_rst_pmx_func &cam1_rst_pmx_func &cam0_rst_cfg_func &cam1_rst_cfg_func
+					&csi0_pwd_n_pmx_func &csi1_pwd_n_pmx_func &csi0_pwd_n_cfg_func &csi1_pwd_n_cfg_func>;
+		clocks = <&crg_ctrl HI3660_CLK_GATE_ISP_SNCLK0>,
+				<&crg_ctrl HI3660_CLK_GATE_ISP_SNCLK1>,
+				<&crg_ctrl HI3660_CLK_GATE_ISP_SNCLK2>;
+		clock-names = "clk_gate_isp_snclk0",
+					"clk_gate_isp_snclk1",
+					"clk_gate_isp_snclk2";
+		clock-rates = <24000000>;
+		DOVDD-supply = <&ldo11>;
+		pool-size = <0x01000000>;
+		status = "ok";
+	};
+
 	/* display start */
 	framebuffer@E8600000 {
 		#address-cells = <2>;
