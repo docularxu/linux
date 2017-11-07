@@ -1,0 +1,5 @@
+#
+# hisilicon isp device configuration.
+# Please keep this list sorted alphabetically
+
+source "drivers/media/platform/hisilicon/isp/Kconfig"
