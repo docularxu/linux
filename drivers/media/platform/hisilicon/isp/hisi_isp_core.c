@@ -342,7 +342,7 @@ static int isp_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id isp_match_table[] = {
+static const struct of_device_id hisi_isp_match_table[] = {
 	{
 		.compatible = COMP_HISI_ISP_NAME,
 		.data = NULL,
@@ -357,7 +357,7 @@ static struct platform_driver isp_driver = {
 	.driver = {
 		.name = DEV_NAME_ISP,
 		.owner  = THIS_MODULE,
-		.of_match_table = of_match_ptr(isp_match_table),
+		.of_match_table = of_match_ptr(hisi_isp_match_table),
 	},
 };
 
