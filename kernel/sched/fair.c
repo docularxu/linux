@@ -6206,6 +6206,32 @@ static inline int select_idle_smt(struct task_struct *p, struct sched_domain *sd
 #endif /* CONFIG_SCHED_SMT */
 
 /*
+ * Scan the cluster domain for idle CPUs
+ */
+static int select_idle_cluster(struct task_struct *p, struct sched_domain *sd, bool has_idle_core, int target)
+{
+	struct cpumask *cpus = this_cpu_cpumask_var_ptr(select_idle_mask);
+	int i, cpu, idle_cpu = -1;
+
+	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
+
+	for_each_cpu_wrap(cpu, cpus, target) {
+		if (has_idle_core) {
+			i = select_idle_core(p, cpu, cpus, &idle_cpu);
+			if ((unsigned int)i < nr_cpumask_bits)
+				return i;
+
+		} else {
+			idle_cpu = __select_idle_cpu(cpu, p);
+			if ((unsigned int)idle_cpu < nr_cpumask_bits)
+				break;
+		}
+	}
+
+	return idle_cpu;
+}
+
+/*
  * Scan the LLC domain for idle CPUs; this is dynamically regulated by
  * comparing the average scan cost (tracked in sd->avg_scan_cost) against the
  * average idle time for this rq (as found in rq->avg_idle).
@@ -6216,7 +6242,7 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool 
 	int i, cpu, idle_cpu = -1, nr = INT_MAX;
 	struct rq *this_rq = this_rq();
 	int this = smp_processor_id();
-	struct sched_domain *this_sd;
+	struct sched_domain *this_sd, *cluster_sd;
 	u64 time = 0;
 
 	this_sd = rcu_dereference(*this_cpu_ptr(&sd_llc));
@@ -6224,6 +6250,9 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool 
 		return -1;
 
 	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
+	cluster_sd = rcu_dereference(*this_cpu_ptr(&sd_cluster));
+	if (cluster_sd)
+		cpumask_andnot(cpus, cpus, sched_domain_span(cluster_sd));
 
 	if (sched_feat(SIS_PROP) && !has_idle_core) {
 		u64 avg_cost, avg_idle, span_avg;
@@ -6425,6 +6454,23 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 			i = select_idle_smt(p, sd, prev);
 			if ((unsigned int)i < nr_cpumask_bits)
 				return i;
+		}
+	}
+
+	if (sched_cluster_active()) {
+		struct sched_domain *cluster_sd = rcu_dereference(per_cpu(sd_cluster, target));
+		if (cluster_sd) {
+			i = select_idle_cluster(p, cluster_sd, has_idle_core, target);
+			if ((unsigned)i < nr_cpumask_bits)
+				return i;
+			/*
+			 * if prev and target are not in same LLC, give other cpus who have
+			 * same LLC with target one chance as they are closer than target
+			 * though they are not the closest; otherwise, no need to scan LLC;
+			 * for smt, we always select idle core in the whole LLC
+			 */
+			if (cpus_share_cache(prev, target) && !has_idle_core)
+				return target;
 		}
 	}
 
