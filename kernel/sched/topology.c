@@ -644,6 +644,8 @@ static void destroy_sched_domains(struct sched_domain *sd)
 DEFINE_PER_CPU(struct sched_domain __rcu *, sd_llc);
 DEFINE_PER_CPU(int, sd_llc_size);
 DEFINE_PER_CPU(int, sd_llc_id);
+DEFINE_PER_CPU(struct sched_domain __rcu *, sd_cluster);
+DEFINE_PER_CPU(int, sd_cluster_id);
 DEFINE_PER_CPU(struct sched_domain_shared __rcu *, sd_llc_shared);
 DEFINE_PER_CPU(struct sched_domain __rcu *, sd_numa);
 DEFINE_PER_CPU(struct sched_domain __rcu *, sd_asym_packing);
@@ -656,6 +658,14 @@ static void update_top_cache_domain(int cpu)
 	struct sched_domain *sd;
 	int id = cpu;
 	int size = 1;
+
+	sd = highest_flag_domain(cpu, SD_SHARE_CLS_RESOURCES);
+	if (sd) {
+		id = cpumask_first(sched_domain_span(sd));
+		size = cpumask_weight(sched_domain_span(sd));
+	}
+	rcu_assign_pointer(per_cpu(sd_cluster, cpu), sd);
+	per_cpu(sd_cluster_id, cpu) = id;
 
 	sd = highest_flag_domain(cpu, SD_SHARE_PKG_RESOURCES);
 	if (sd) {
@@ -1502,6 +1512,7 @@ int __read_mostly		node_reclaim_distance = RECLAIM_DISTANCE;
  */
 #define TOPOLOGY_SD_FLAGS		\
 	(SD_SHARE_CPUCAPACITY	|	\
+	 SD_SHARE_CLS_RESOURCES	|	\
 	 SD_SHARE_PKG_RESOURCES |	\
 	 SD_NUMA		|	\
 	 SD_ASYM_PACKING)

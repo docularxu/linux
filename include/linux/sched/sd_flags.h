@@ -110,6 +110,15 @@ SD_FLAG(SD_ASYM_CPUCAPACITY_FULL, SDF_SHARED_PARENT | SDF_NEEDS_GROUPS)
 SD_FLAG(SD_SHARE_CPUCAPACITY, SDF_SHARED_CHILD | SDF_NEEDS_GROUPS)
 
 /*
+ * Domain members share CPU cluster resources (i.e. llc cache tags or l2)
+ *
+ * SHARED_CHILD: Set from the base domain up until spanned CPUs no longer share
+ *               the cluster resouces (such as llc tags or l2)
+ * NEEDS_GROUPS: Caches are shared between groups.
+ */
+SD_FLAG(SD_SHARE_CLS_RESOURCES, SDF_SHARED_CHILD | SDF_NEEDS_GROUPS)
+
+/*
  * Domain members share CPU package resources (i.e. caches)
  *
  * SHARED_CHILD: Set from the base domain up until spanned CPUs no longer share
