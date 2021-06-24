@@ -6071,6 +6071,10 @@ static inline int __select_idle_cpu(int cpu, struct task_struct *p)
 	return -1;
 }
 
+#ifdef CONFIG_SCHED_CLUSTER
+DEFINE_STATIC_KEY_FALSE(sched_cluster_present);
+#endif
+
 #ifdef CONFIG_SCHED_SMT
 DEFINE_STATIC_KEY_FALSE(sched_smt_present);
 EXPORT_SYMBOL_GPL(sched_smt_present);

@@ -8653,6 +8653,17 @@ int sched_cpu_activate(unsigned int cpu)
 	if (cpumask_weight(cpu_smt_mask(cpu)) == 2)
 		static_branch_inc_cpuslocked(&sched_smt_present);
 #endif
+
+#ifdef CONFIG_SCHED_CLUSTER
+	/*
+	 * When going up, increment the number of cluster cpus with
+	 * cluster present.
+	 */
+	if (cpumask_weight(cpu_cluster_mask(cpu)) > cpumask_weight(cpu_smt_mask(cpu)) &&
+			cpumask_weight(cpu_cluster_mask(cpu)) < cpumask_weight(cpu_coregroup_mask(cpu)))
+		static_branch_inc_cpuslocked(&sched_cluster_present);
+#endif
+
 	set_cpu_active(cpu, true);
 
 	if (sched_smp_initialized) {
@@ -8727,6 +8738,15 @@ int sched_cpu_deactivate(unsigned int cpu)
 	 */
 	if (cpumask_weight(cpu_smt_mask(cpu)) == 2)
 		static_branch_dec_cpuslocked(&sched_smt_present);
+#endif
+
+#ifdef CONFIG_SCHED_CLUSTER
+	/*
+	 * When going down, decrement the number of cpus with cluster present.
+	 */
+	if (cpumask_weight(cpu_cluster_mask(cpu)) > cpumask_weight(cpu_smt_mask(cpu)) &&
+	    cpumask_weight(cpu_cluster_mask(cpu)) < cpumask_weight(cpu_coregroup_mask(cpu)))
+		static_branch_dec_cpuslocked(&sched_cluster_present);
 #endif
 
 	if (!sched_smp_initialized)

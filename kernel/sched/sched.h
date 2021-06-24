@@ -6,6 +6,7 @@
 
 #include <linux/sched/autogroup.h>
 #include <linux/sched/clock.h>
+#include <linux/sched/cluster.h>
 #include <linux/sched/coredump.h>
 #include <linux/sched/cpufreq.h>
 #include <linux/sched/cputime.h>
