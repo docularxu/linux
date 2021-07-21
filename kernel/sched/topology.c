@@ -9,6 +9,8 @@ DEFINE_MUTEX(sched_domains_mutex);
 /* Protected by sched_domains_mutex: */
 static cpumask_var_t sched_domains_tmpmask;
 static cpumask_var_t sched_domains_tmpmask2;
+/* set via /proc/sys/kernel/sched_cluster_enabled */
+unsigned int __read_mostly sysctl_sched_cluster_enabled;
 
 #ifdef CONFIG_SCHED_DEBUG
 
@@ -204,6 +206,34 @@ sd_parent_degenerate(struct sched_domain *sd, struct sched_domain *parent)
 
 	return 1;
 }
+
+#ifdef CONFIG_SCHED_CLUSTER
+void set_sched_cluster(void);
+
+DEFINE_MUTEX(sched_cluster_mutex);
+int sched_cluster_handler(struct ctl_table *table, int write,
+		void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+	unsigned int oldval;
+
+	if (write && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	mutex_lock(&sched_cluster_mutex);
+	oldval = sysctl_sched_cluster_enabled;
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+	if (!ret && write) {
+		if (oldval != sysctl_sched_cluster_enabled) {
+			set_sched_cluster();
+			arch_rebuild_cpu_topology();
+		}
+	}
+	mutex_unlock(&sched_cluster_mutex);
+
+	return ret;
+}
+#endif
 
 #if defined(CONFIG_ENERGY_MODEL) && defined(CONFIG_CPU_FREQ_GOV_SCHEDUTIL)
 DEFINE_STATIC_KEY_FALSE(sched_energy_present);
@@ -1651,6 +1681,23 @@ static struct sched_domain_topology_level default_topology[] = {
 
 static struct sched_domain_topology_level *sched_domain_topology =
 	default_topology;
+
+#ifdef CONFIG_SCHED_CLUSTER
+void set_sched_cluster(void)
+{
+	struct sched_domain_topology_level *tl;
+
+	for (tl = sched_domain_topology; tl->mask; tl++) {
+		if (tl->sd_flags && (tl->sd_flags() & SD_CLUSTER)) {
+			if (!sysctl_sched_cluster_enabled)
+				tl->flags |= SDTL_SKIP;
+			else
+				tl->flags &= ~SDTL_SKIP;
+			break;
+		}
+	}
+}
+#endif
 
 static struct sched_domain_topology_level *next_tl(struct sched_domain_topology_level *tl)
 {
