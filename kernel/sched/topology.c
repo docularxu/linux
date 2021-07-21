@@ -1514,6 +1514,7 @@ int __read_mostly		node_reclaim_distance = RECLAIM_DISTANCE;
 	(SD_SHARE_CPUCAPACITY	|	\
 	 SD_SHARE_CLS_RESOURCES	|	\
 	 SD_SHARE_PKG_RESOURCES |	\
+	 SD_CLUSTER		|	\
 	 SD_NUMA		|	\
 	 SD_ASYM_PACKING)
 
