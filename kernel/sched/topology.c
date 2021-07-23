@@ -210,6 +210,19 @@ sd_parent_degenerate(struct sched_domain *sd, struct sched_domain *parent)
 #ifdef CONFIG_SCHED_CLUSTER
 void set_sched_cluster(void);
 
+static int __init sched_cluster_option(char *str)
+{
+        int enable;
+
+        if (get_option(&str, &enable)) {
+                sysctl_sched_cluster_enabled = enable;
+                return 0;
+        }
+
+        return -EINVAL;
+}
+early_param("sched_cluster", sched_cluster_option);
+
 DEFINE_MUTEX(sched_cluster_mutex);
 int sched_cluster_handler(struct ctl_table *table, int write,
 		void *buffer, size_t *lenp, loff_t *ppos)
