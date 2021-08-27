@@ -5007,6 +5007,7 @@ static struct pci_driver sas_v3_pci_driver = {
 	.remove		= hisi_sas_v3_remove,
 	.err_handler	= &hisi_sas_err_handler,
 	.driver.pm	= &hisi_sas_v3_pm_ops,
+	.shutdown	= hisi_sas_v3_remove,
 };
 
 module_pci_driver(sas_v3_pci_driver);
