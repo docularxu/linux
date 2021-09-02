@@ -6250,9 +6250,11 @@ static int select_idle_cpu(struct task_struct *p, struct sched_domain *sd, bool 
 		return -1;
 
 	cpumask_and(cpus, sched_domain_span(sd), p->cpus_ptr);
+#if 0
 	cluster_sd = rcu_dereference(*this_cpu_ptr(&sd_cluster));
 	if (cluster_sd)
 		cpumask_andnot(cpus, cpus, sched_domain_span(cluster_sd));
+#endif
 
 	if (sched_feat(SIS_PROP) && !has_idle_core) {
 		u64 avg_cost, avg_idle, span_avg;
@@ -6366,6 +6368,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 	struct sched_domain *sd;
 	unsigned long task_util;
 	int i, recent_used_cpu;
+	int scan_from = target;
 
 	/*
 	 * On asymmetric system, update task utilization because we will check
@@ -6460,6 +6463,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 	if (sched_cluster_active()) {
 		struct sched_domain *cluster_sd = rcu_dereference(per_cpu(sd_cluster, target));
 		if (cluster_sd) {
+#if 0
 			i = select_idle_cluster(p, cluster_sd, has_idle_core, target);
 			if ((unsigned)i < nr_cpumask_bits)
 				return i;
@@ -6471,10 +6475,13 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 			 */
 			if (cpus_share_cache(prev, target) && !has_idle_core)
 				return target;
+#else
+			scan_from = cpumask_first(sched_domain_span(cluster_sd));
+#endif
 		}
 	}
 
-	i = select_idle_cpu(p, sd, has_idle_core, target);
+	i = select_idle_cpu(p, sd, has_idle_core, scan_from);
 	if ((unsigned)i < nr_cpumask_bits)
 		return i;
 
