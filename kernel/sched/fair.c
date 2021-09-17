@@ -6463,6 +6463,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 			i = select_idle_cluster(p, cluster_sd, has_idle_core, target);
 			if ((unsigned)i < nr_cpumask_bits)
 				return i;
+#if 0
 			/*
 			 * if prev and target are not in same LLC, give other cpus who have
 			 * same LLC with target one chance as they are closer than target
@@ -6471,6 +6472,7 @@ static int select_idle_sibling(struct task_struct *p, int prev, int target)
 			 */
 			if (cpus_share_cache(prev, target) && !has_idle_core)
 				return target;
+#endif
 		}
 	}
 
