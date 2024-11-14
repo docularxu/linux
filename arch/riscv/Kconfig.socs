@@ -131,6 +131,13 @@ endchoice
 
 endif
 
+config SPACEMIT_ERRATA_LOAD_ATOMIC
+	bool "enable issue fix which caused by readforward and writeback"
+	depends on SOC_SPACEMIT_K1X
+	default y
+	help
+	  This enable fix errata caused by readforward and writeback.
+
 endif
 
 endmenu # "SoC selection"
