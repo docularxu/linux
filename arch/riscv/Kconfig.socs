@@ -86,4 +86,11 @@ config SOC_CANAAN_K210
 	help
 	  This enables support for Canaan Kendryte K210 SoC platform hardware.
 
+config SPACEMIT_ERRATA_LOAD_ATOMIC
+	bool "enable issue fix which caused by readforward and writeback"
+	depends on ARCH_SPACEMIT_K1
+	default y
+	help
+	  This enable fix errata caused by readforward and writeback.
+
 endmenu # "SoC selection"
