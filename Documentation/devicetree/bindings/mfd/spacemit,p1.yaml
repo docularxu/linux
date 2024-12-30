@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mfd/spacemit,p1.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: P1 Power Management Integrated Circuit
+
+maintainers:
+  - Troy Mitchell <troymitchell988@gmail.com>
+
+description:
+  PMIC chip P1 produced by SpacemiT. The device consists of I2C controlled MFD,
+  which contains regulator, pinctrl, pwrkey and rtc.
+
+properties:
+  compatible:
+    const: spacemit,p1-pmic
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  regulators:
+    type: object
+
+    properties:
+      compatible:
+        const: pmic,p1-regulator
+
+    required:
+      - compatible
+
+    patternProperties:
+      "^(dcdc-reg[1-6]|aldo-reg[1-4]|dldo-reg[1-7]|switch)$":
+        type: object
+        $ref: /schemas/regulator/regulator.yaml#
+        unevaluatedProperties: false
+
+    unevaluatedProperties: false
+
+  pinctrl:
+    type: object
+
+    properties:
+      compatible:
+        const: pmic,p1-pinctrl
+
+      "#gpio-cells":
+        const: 2
+
+      gpio-controller: true
+
+    required:
+      - compatible
+      - "#gpio-cells"
+      - gpio-controller
+
+    unevaluatedProperties: false
+
+  pwrkey:
+    type: object
+    $ref: /schemas/input/input.yaml#
+
+    properties:
+      compatible:
+        const: pmic,p1-pwrkey
+
+    required:
+      - compatible
+
+    unevaluatedProperties: false
+
+  rtc:
+    type: object
+    $ref: /schemas/rtc/rtc.yaml#
+
+    properties:
+      compatible:
+        const: pmic,p1-rtc
+
+    required:
+      - compatible
+
+    unevaluatedProperties: false
+
+
+required:
+  - compatible
+  - reg
+  - interrupts
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    i2c {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        pmic@41 {
+            compatible = "spacemit,p1";
+            reg = <0x41>;
+            interrupt-parent = <&intc>;
+            interrupts = <64>;
+
+            regulators {
+                compatible = "pmic,p1-regulator";
+
+                dcdc-reg1 {
+                    regulator-name = "dcdc1";
+                    regulator-min-microvolt = <500000>;
+                    regulator-max-microvolt = <3450000>;
+                    regulator-ramp-delay = <5000>;
+                    regulator-always-on;
+                };
+
+                aldo-reg1 {
+                    regulator-name = "aldo1";
+                    regulator-min-microvolt = <500000>;
+                    regulator-max-microvolt = <3400000>;
+                    regulator-boot-on;
+                };
+
+                dldo-reg1 {
+                    regulator-name = "dldo1";
+                    regulator-min-microvolt = <500000>;
+                    regulator-max-microvolt = <3400000>;
+                    regulator-boot-on;
+                };
+
+                switch {
+                    regulator-name = "switch";
+                };
+            };
+
+            pinctrl {
+                    compatible = "pmic,p1-pinctrl";
+                    gpio-controller;
+                    #gpio-cells = <2>;
+            };
+
+            pwrkey {
+                compatible = "pmic,p1-pwrkey";
+            };
+
+            rtc {
+                compatible = "pmic,p1-rtc";
+            };
+        };
+    };
