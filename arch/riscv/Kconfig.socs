@@ -99,4 +99,58 @@ config SPACEMIT_ERRATA_LOAD_ATOMIC
 	help
 	  This enable fix errata caused by readforward and writeback.
 
+config ARCH_SPACEMIT
+	bool "Spacemit SoCs"
+	select SIFIVE_PLIC
+	help
+	  This enables support for Spacemit SoCs platform hardware.
+
+if ARCH_SPACEMIT
+
+choice
+	prompt "Spacemit SOCs platform"
+	help
+	  choice Spacemit soc platform
+
+	config ARCH_SPACEMIT_K1
+		bool "k1"
+		help
+		  select Spacemit k1 Platform SOCs.
+
+	config ARCH_SPACEMIT_K2
+		bool "k2"
+		help
+		  select Spacemit k2 Platform SOCs.
+
+endchoice
+
+if ARCH_SPACEMIT_K1
+
+choice
+	prompt "Spacemit K1 serial SOCs"
+	help
+	  choice Spacemit K1 soc platform
+
+	config ARCH_SPACEMIT_K1PRO
+		bool "k1-pro"
+		select DW_APB_TIMER_OF
+		help
+		  This enables support for Spacemit k1-pro Platform Hardware.
+
+	config ARCH_SPACEMIT_K1X
+		bool "k1-x"
+		help
+		  This enables support for Spacemit k1-x Platform Hardware.
+endchoice
+
+config ARCH_SPACEMIT_K1_FPGA
+	bool "Spacemit K1 serial SoC FPGA platform"
+	default n
+	help
+	  This enable FPGA platform for K1 SoCs.
+
+endif
+
+endif
+
 endmenu # "SoC selection"
