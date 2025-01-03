@@ -564,6 +564,14 @@ config SPI_K1
 	help
 	  Enable support for the Spacemit K1 SPI controller.
 
+config SPI_K1_QSPI
+	tristate "K1 QuadSPI Controller"
+	depends on SPI_MEM
+	help
+	  This enables support for the Spacemit K1 QuadSPI controller in
+	  master mode.  This controller does only support the high-level
+	  SPI memory interface and not support generic SPI messages.
+
 config SPI_LM70_LLP
 	tristate "Parallel port adapter for LM70 eval board (DEVELOPMENT)"
 	depends on PARPORT

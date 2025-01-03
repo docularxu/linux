@@ -75,6 +75,7 @@ obj-$(CONFIG_SPI_INTEL_PCI)		+= spi-intel-pci.o
 obj-$(CONFIG_SPI_INTEL_PLATFORM)	+= spi-intel-platform.o
 obj-$(CONFIG_SPI_K1)			+= spi-k1x.o
 spi-k1x-y				:= spi-k1x-main.o spi-k1x-dma.o
+obj-$(CONFIG_SPI_K1_QSPI)		+= spi-k1x-qspi.o
 obj-$(CONFIG_SPI_LANTIQ_SSC)		+= spi-lantiq-ssc.o
 obj-$(CONFIG_SPI_JCORE)			+= spi-jcore.o
 obj-$(CONFIG_SPI_KSPI2)			+= spi-kspi2.o
