@@ -30,6 +30,12 @@ config ARCH_SPACEMIT
 	help
 	  This enables support for SpacemiT SoC platform hardware.
 
+config ARCH_SPACEMIT_K1X
+	bool "SpacemiT K1-X"
+	depends on ARCH_SPACEMIT || COMPILE_TEST
+	help
+	  Enable support for the SpacemiT K1-X SOC.
+
 config ARCH_STARFIVE
 	def_bool SOC_STARFIVE
 
