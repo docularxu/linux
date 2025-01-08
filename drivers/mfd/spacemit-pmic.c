@@ -144,12 +144,12 @@ static struct i2c_driver spacemit_pmic_i2c_driver = {
 
 static int __init spacemit_pmic_init(void)
 {
-	return platform_driver_register(&spacemit_pmic_i2c_driver);
+	return i2c_add_driver(&spacemit_pmic_i2c_driver);
 }
 
 static void __exit spacemit_pmic_exit(void)
 {
-	platform_driver_unregister(&spacemit_pmic_i2c_driver);
+	i2c_del_driver(&spacemit_pmic_i2c_driver);
 }
 
 module_init(spacemit_pmic_init);
