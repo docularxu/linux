@@ -704,10 +704,9 @@ static int setup(struct spi_device *spi)
 {
 	struct chip_data *chip;
 	struct spi_driver_data *drv_data = spi_controller_get_devdata(spi->controller);
-	uint tx_thres, tx_hi_thres, rx_thres;
+	uint tx_thres, rx_thres;
 
 	tx_thres = TX_THRESH_DFLT;
-	tx_hi_thres = 0;
 	rx_thres = RX_THRESH_DFLT;
 
 	/* Only alloc on first setup */
