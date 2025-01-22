@@ -566,7 +566,7 @@ config SPI_K1
 
 config SPI_K1_QSPI
 	tristate "K1 QuadSPI Controller"
-	depends on SPI_MEM
+	depends on ARCH_SPACEMIT_K1
 	help
 	  This enables support for the Spacemit K1 QuadSPI controller in
 	  master mode.  This controller does only support the high-level
