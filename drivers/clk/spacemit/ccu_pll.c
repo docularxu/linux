@@ -48,8 +48,6 @@ static unsigned long ccu_pll_get_vco_freq(struct clk_hw *hw)
 			return pll_rate_table[i].rate;
 	}
 
-	WARN_ON_ONCE(1);
-
 	return 0;
 }
 
