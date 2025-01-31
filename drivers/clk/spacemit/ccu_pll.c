@@ -78,8 +78,6 @@ static unsigned long ccu_pll_get_vco_freq(struct clk_hw *hw)
 		    (freq_pll_regs_table[i].div_frac == div_frc))
 			return freq_pll_regs_table[i].rate;
 
-	WARN_ON_ONCE(1);
-
 	return 0;
 }
 
