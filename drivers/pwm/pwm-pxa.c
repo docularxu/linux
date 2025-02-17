@@ -25,6 +25,7 @@
 #include <linux/io.h>
 #include <linux/pwm.h>
 #include <linux/of.h>
+#include <linux/reset.h>
 
 #include <asm/div64.h>
 
@@ -49,10 +50,10 @@ MODULE_DEVICE_TABLE(platform, pwm_id_table);
 #define PWMDCR_FD	(1 << 10)
 
 struct pxa_pwm_chip {
-	struct device	*dev;
-
-	struct clk	*clk;
-	void __iomem	*mmio_base;
+	struct device		*dev;
+	struct clk		*clk;
+	void __iomem		*mmio_base;
+	struct reset_control	*reset;
 };
 
 static inline struct pxa_pwm_chip *to_pxa_pwm_chip(struct pwm_chip *chip)
@@ -155,6 +156,25 @@ MODULE_DEVICE_TABLE(of, pwm_of_match);
 #define pwm_of_match NULL
 #endif
 
+static void pxa_pwm_reset_control_assert(void *data)
+{
+	struct reset_control *rst = data;
+
+	reset_control_assert(rst);
+}
+
+static int pxa_pwm_reset_control_deassert(
+		struct device *dev, struct reset_control *rst)
+{
+	int ret;
+
+	ret = reset_control_deassert(rst);
+	if (ret)
+		return ret;
+
+	return devm_add_action_or_reset(dev, pxa_pwm_reset_control_assert, rst);
+}
+
 static int pwm_probe(struct platform_device *pdev)
 {
 	const struct platform_device_id *id = platform_get_device_id(pdev);
@@ -178,6 +198,17 @@ static int pwm_probe(struct platform_device *pdev)
 	pc->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(pc->clk))
 		return PTR_ERR(pc->clk);
+
+	pc->reset = devm_reset_control_get_optional(&pdev->dev, NULL);
+	if (IS_ERR(pc->reset))
+		return PTR_ERR(pc->reset);
+
+	/* reset control is optional, and pc->reset can be NULL */
+	if (pc->reset) {
+		ret = pxa_pwm_reset_control_deassert(&pdev->dev, pc->reset);
+		if (ret)
+			return ret;
+	}
 
 	chip->ops = &pxa_pwm_ops;
 
