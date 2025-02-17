@@ -22,6 +22,7 @@
 #include <linux/slab.h>
 #include <linux/err.h>
 #include <linux/clk.h>
+#include <linux/reset.h>
 #include <linux/io.h>
 #include <linux/pwm.h>
 #include <linux/of.h>
@@ -52,6 +53,7 @@ struct pxa_pwm_chip {
 	struct device	*dev;
 
 	struct clk	*clk;
+	struct reset_control	*reset;
 	void __iomem	*mmio_base;
 };
 
@@ -155,6 +157,25 @@ MODULE_DEVICE_TABLE(of, pwm_of_match);
 #define pwm_of_match NULL
 #endif
 
+static void pxa_pwm_reset_control_release(void *data)
+{
+	struct reset_control *rst = data;
+
+	reset_control_assert(rst);
+}
+
+static int pxa_pwm_reset_control_deassert(
+		struct device *dev, struct reset_control *rst)
+{
+	int ret;
+
+	ret = reset_control_deassert(rst);
+	if (ret)
+		return ret;
+
+	return devm_add_action_or_reset(dev, pxa_pwm_reset_control_release, rst);
+}
+
 static int pwm_probe(struct platform_device *pdev)
 {
 	const struct platform_device_id *id = platform_get_device_id(pdev);
@@ -178,6 +199,14 @@ static int pwm_probe(struct platform_device *pdev)
 	pc->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(pc->clk))
 		return PTR_ERR(pc->clk);
+
+	pc->reset = devm_reset_control_get_optional(&pdev->dev, NULL);
+	if(IS_ERR(pc->reset))
+		return PTR_ERR(pc->reset);
+
+	ret = pxa_pwm_reset_control_deassert(&pdev->dev, pc->reset);
+	if (ret)
+		return ret;
 
 	chip->ops = &pxa_pwm_ops;
 
