@@ -561,12 +561,15 @@
 			status = "reserved"; /* for TEE usage */
 		};
 
+		/*
+		 * TODO: all pwm0 ~ pwm19 nodes, update clocks and resets
+		 */
 		pwm0: pwm@d401a000 {
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401a000 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM0>;
-			resets = <&reset RESET_PWM0>;
+/* 			clocks = <&ccu CLK_PWM0>; */
+/* 			resets = <&reset RESET_PWM0>; */
 			status = "disabled";
 		};
 
@@ -574,8 +577,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401a400 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM1>;
-			resets = <&reset RESET_PWM1>;
+/* 			clocks = <&ccu CLK_PWM1>; */
+/* 			resets = <&reset RESET_PWM1>; */
 			status = "disabled";
 		};
 
@@ -583,8 +586,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401a800 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM2>;
-			resets = <&reset RESET_PWM2>;
+/* 			clocks = <&ccu CLK_PWM2>; */
+/* 			resets = <&reset RESET_PWM2>; */
 			status = "disabled";
 		};
 
@@ -592,8 +595,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401ac00 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM3>;
-			resets = <&reset RESET_PWM3>;
+/* 			clocks = <&ccu CLK_PWM3>; */
+/* 			resets = <&reset RESET_PWM3>; */
 			status = "disabled";
 		};
 
@@ -601,8 +604,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401b000 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM4>;
-			resets = <&reset RESET_PWM4>;
+/* 			clocks = <&ccu CLK_PWM4>; */
+/* 			resets = <&reset RESET_PWM4>; */
 			status = "disabled";
 		};
 
@@ -610,8 +613,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401b400 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM5>;
-			resets = <&reset RESET_PWM5>;
+/* 			clocks = <&ccu CLK_PWM5>; */
+/* 			resets = <&reset RESET_PWM5>; */
 			status = "disabled";
 		};
 
@@ -619,8 +622,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401b800 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM6>;
-			resets = <&reset RESET_PWM6>;
+/* 			clocks = <&ccu CLK_PWM6>; */
+/* 			resets = <&reset RESET_PWM6>; */
 			status = "disabled";
 		};
 
@@ -628,8 +631,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd401bc00 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM7>;
-			resets = <&reset RESET_PWM7>;
+/* 			clocks = <&ccu CLK_PWM7>; */
+/* 			resets = <&reset RESET_PWM7>; */
 			status = "disabled";
 		};
 
@@ -637,8 +640,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4020000 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM8>;
-			resets = <&reset RESET_PWM8>;
+/* 			clocks = <&ccu CLK_PWM8>; */
+/* 			resets = <&reset RESET_PWM8>; */
 			status = "disabled";
 		};
 
@@ -646,8 +649,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4020400 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM9>;
-			resets = <&reset RESET_PWM9>;
+/* 			clocks = <&ccu CLK_PWM9>; */
+/* 			resets = <&reset RESET_PWM9>; */
 			status = "disabled";
 		};
 
@@ -655,8 +658,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4020800 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM10>;
-			resets = <&reset RESET_PWM10>;
+/* 			clocks = <&ccu CLK_PWM10>; */
+/* 			resets = <&reset RESET_PWM10>; */
 			status = "disabled";
 		};
 
@@ -664,8 +667,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4020c00 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM11>;
-			resets = <&reset RESET_PWM11>;
+/* 			clocks = <&ccu CLK_PWM11>; */
+/* 			resets = <&reset RESET_PWM11>; */
 			status = "disabled";
 		};
 
@@ -673,8 +676,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4021000 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM12>;
-			resets = <&reset RESET_PWM12>;
+/* 			clocks = <&ccu CLK_PWM12>; */
+/* 			resets = <&reset RESET_PWM12>; */
 			status = "disabled";
 		};
 
@@ -682,8 +685,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4021400 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM13>;
-			resets = <&reset RESET_PWM13>;
+/* 			clocks = <&ccu CLK_PWM13>; */
+/* 			resets = <&reset RESET_PWM13>; */
 			status = "disabled";
 		};
 
@@ -691,8 +694,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4021800 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM14>;
-			resets = <&reset RESET_PWM14>;
+/* 			clocks = <&ccu CLK_PWM14>; */
+/* 			resets = <&reset RESET_PWM14>; */
 			status = "disabled";
 		};
 
@@ -700,8 +703,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4021c00 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM15>;
-			resets = <&reset RESET_PWM15>;
+/* 			clocks = <&ccu CLK_PWM15>; */
+/* 			resets = <&reset RESET_PWM15>; */
 			status = "disabled";
 		};
 
@@ -709,8 +712,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4022000 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM16>;
-			resets = <&reset RESET_PWM16>;
+/* 			clocks = <&ccu CLK_PWM16>; */
+/* 			resets = <&reset RESET_PWM16>; */
 			status = "disabled";
 		};
 
@@ -718,8 +721,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4022400 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM17>;
-			resets = <&reset RESET_PWM17>;
+/* 			clocks = <&ccu CLK_PWM17>; */
+/* 			resets = <&reset RESET_PWM17>; */
 			status = "disabled";
 		};
 
@@ -727,8 +730,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4022800 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM18>;
-			resets = <&reset RESET_PWM18>;
+/* 			clocks = <&ccu CLK_PWM18>; */
+/* 			resets = <&reset RESET_PWM18>; */
 			status = "disabled";
 		};
 
@@ -736,8 +739,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4022c00 0x0 0x10>;
 			#pwm-cells = <1>;
-			clocks = <&ccu CLK_PWM19>;
-			resets = <&reset RESET_PWM19>;
+/* 			clocks = <&ccu CLK_PWM19>; */
+/* 			resets = <&reset RESET_PWM19>; */
 			status = "disabled";
 		};
 	};
