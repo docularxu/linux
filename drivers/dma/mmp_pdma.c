@@ -16,6 +16,7 @@
 #include <linux/platform_data/mmp_dma.h>
 #include <linux/dmapool.h>
 #include <linux/clk.h>
+#include <linux/reset.h>
 #include <linux/of_dma.h>
 #include <linux/of.h>
 
@@ -149,6 +150,7 @@ struct mmp_pdma_config {
 struct mmp_pdma_device {
 	int				dma_channels;
 	struct clk			*clk;
+	struct reset_control		*resets;
 	void __iomem			*base;
 	struct device			*dev;
 	struct dma_device		device;
@@ -1183,6 +1185,12 @@ static int mmp_pdma_probe(struct platform_device *op)
 	if(IS_ERR(pdev->clk))
 		return dev_err_probe(pdev->dev, PTR_ERR(pdev->clk),
 				     "could not enable dma clock\n");
+
+	pdev->resets = devm_reset_control_get_optional_exclusive_deasserted(
+			pdev->dev, NULL);
+	if (IS_ERR(pdev->resets))
+		return dev_err_probe(pdev->dev, PTR_ERR(pdev->resets),
+				     "could not get and deassert resets\n");
 
 	if (pdev->dev->of_node) {
 		/* Parse new and deprecated dma-channels properties */
