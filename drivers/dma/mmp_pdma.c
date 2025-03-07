@@ -145,6 +145,7 @@ struct mmp_pdma_phy {
 
 struct mmp_pdma_device {
 	int				dma_channels;
+	struct clk			*clk;
 	void __iomem			*base;
 	struct device			*dev;
 	struct dma_device		device;
@@ -1087,6 +1088,7 @@ static void mmp_pdma_remove(struct platform_device *op)
 	}
 
 	dma_async_device_unregister(&pdev->device);
+	clk_disable_unprepare(pdev->clk);
 }
 
 static int mmp_pdma_chan_init(struct mmp_pdma_device *pdev, int idx, int irq)
@@ -1166,6 +1168,14 @@ static int mmp_pdma_probe(struct platform_device *op)
 	pdev->base = devm_platform_ioremap_resource(op, 0);
 	if (IS_ERR(pdev->base))
 		return PTR_ERR(pdev->base);
+
+	pdev->clk = devm_clk_get(pdev->dev, NULL);
+	if(IS_ERR(pdev->clk))
+		return PTR_ERR(pdev->clk);
+
+	ret = clk_prepare_enable(pdev->clk);
+	if (ret)
+		return dev_err_probe(pdev->dev, ret, "could not enable dma bus clock\n");
 
 	if (pdev->dev->of_node) {
 		/* Parse new and deprecated dma-channels properties */
