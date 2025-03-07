@@ -25,9 +25,12 @@
 #define DCSR		0x0000
 #define DALGN		0x00a0
 #define DINT		0x00f0
-#define DDADR		0x0200
+#define DDADR(n)	(0x0200 + ((n) << 4))
 #define DSADR(n)	(0x0204 + ((n) << 4))
 #define DTADR(n)	(0x0208 + ((n) << 4))
+#define DDADRH(n)	(0x0300 + ((n) << 4))
+#define DSADRH(n)	(0x0304 + ((n) << 4))
+#define DTADRH(n)	(0x0308 + ((n) << 4))
 #define DCMD		0x020c
 
 #define DCSR_RUN	BIT(31)	/* Run Bit (read / write) */
@@ -44,6 +47,7 @@
 #define DCSR_EORSTOPEN	BIT(26)	/* STOP on an EOR */
 #define DCSR_SETCMPST	BIT(25)	/* Set Descriptor Compare Status */
 #define DCSR_CLRCMPST	BIT(24)	/* Clear Descriptor Compare Status */
+#define DCSR_LPAEEN	BIT(21)	/* Long Physical Address Extension Enable */
 #define DCSR_CMPST	BIT(10)	/* The Descriptor Compare Status */
 #define DCSR_EORINTR	BIT(9)	/* The end of Receive */
 
@@ -76,6 +80,16 @@ struct mmp_pdma_desc_hw {
 	u32 dsadr;	/* DSADR value for the current transfer */
 	u32 dtadr;	/* DTADR value for the current transfer */
 	u32 dcmd;	/* DCMD value for the current transfer */
+	/*
+	 * The following 32-bit words are only used in the 64-bit, ie.
+	 * LPAE (Long Physical Address Extension) mode.
+	 * They are used to specify the high 32 bits of the descriptor's
+	 * addresses.
+	 */
+	u32 ddadrh;	/* High 32-bit of DDADR */
+	u32 dsadrh;	/* High 32-bit of DSADR */
+	u32 dtadrh;	/* High 32-bit of DTADR */
+	u32 rsvd;	/* reserved */
 } __aligned(32);
 
 struct mmp_pdma_desc_sw {
@@ -120,13 +134,43 @@ struct mmp_pdma_phy {
 	struct mmp_pdma_chan *vchan;
 };
 
+/**
+ * struct mmp_pdma_config - configuration for the MMP PDMA controller
+ * @set_phy_ddadr: function to program the descriptor's address into the
+ *      DDADR/DDADRH registers for a specific channel
+ * @split_dma_addr_to_components: function to split a DMA address
+ *      (dma_addr_t) into lower and upper 32-bit components
+ * @combine_u64: function to combine two 32-bit values (lower and upper)
+ *      into a single 64-bit value of type u64
+ * @read_iomem_combine_u64: function to read two 32-bit values from
+ *      I/O memory and combine them into a single value of type u64
+ * @dcsr_channel_run_bits: DCSR bits to set/clear when enabling/disabling
+ *      a channel
+ * @dma_mask: DMA address mask for determining address width capabilities
+ *      of the controller
+ */
+struct mmp_pdma_config {
+	void (*set_phy_ddadr)(struct mmp_pdma_phy *phy, dma_addr_t addr);
+	void (*split_dma_addr_to_components)(u32 *lower,
+					     u32 *upper,
+					     dma_addr_t addr);
+	u64 (*combine_u64)(u32 lower, u32 upper);
+	u64 (*read_iomem_combine_u64)(void __iomem *base,
+				      u32 low_offset,
+				      u32 high_offset);
+	u32 dcsr_channel_run_bits;
+	u64 dma_mask;
+};
+
 struct mmp_pdma_device {
 	int				dma_channels;
 	void __iomem			*base;
 	struct device			*dev;
 	struct dma_device		device;
 	struct mmp_pdma_phy		*phy;
-	spinlock_t phy_lock; /* protect alloc/free phy channels */
+	spinlock_t			phy_lock; /* protect alloc/free *
+						   * phy channels       */
+	const struct mmp_pdma_config 	*config;
 };
 
 #define tx_to_mmp_pdma_desc(tx)					\
@@ -142,14 +186,58 @@ static int mmp_pdma_config_write(struct dma_chan *dchan,
 			   struct dma_slave_config *cfg,
 			   enum dma_transfer_direction direction);
 
-static void set_desc(struct mmp_pdma_phy *phy, dma_addr_t addr)
+static void split_dma_addr_to_components_32_bits(u32 *lower,
+						 u32 *upper __maybe_unused,
+						 dma_addr_t addr)
 {
-	u32 reg = (phy->idx << 4) + DDADR;
-
-	writel(addr, phy->base + reg);
+	*lower = addr;
 }
 
-static void enable_chan(struct mmp_pdma_phy *phy)
+static void split_dma_addr_to_components_64_bits(u32 *lower,
+						 u32 *upper,
+						 dma_addr_t addr)
+{
+	*lower = lower_32_bits(addr);
+	*upper = upper_32_bits(addr);
+}
+
+static void set_phy_ddadr_32_bits(struct mmp_pdma_phy *phy, dma_addr_t addr)
+{
+	writel(addr, phy->base + DDADR(phy->idx));
+}
+
+static void set_phy_ddadr_64_bits(struct mmp_pdma_phy *phy, dma_addr_t addr)
+{
+	writel(lower_32_bits(addr), phy->base + DDADR(phy->idx));
+	writel(upper_32_bits(addr), phy->base + DDADRH(phy->idx));
+}
+
+static u64 combine_u64_32_bits(u32 lower, u32 upper __maybe_unused)
+{
+	return lower;
+}
+
+static u64 combine_u64_64_bits(u32 lower, u32 upper)
+{
+	return ((u64)upper << 32) | lower;
+}
+
+static u64 read_iomem_combine_u64_64_bits(void __iomem *base,
+					  u32 low_offset,
+					  u32 high_offset)
+{
+	return combine_u64_64_bits(readl(base + low_offset),
+				   readl(base + high_offset));
+}
+
+static u64 read_iomem_combine_u64_32_bits(void __iomem *base,
+					  u32 low_offset,
+					  u32 high_offset __maybe_unused)
+{
+	return readl(base + low_offset);
+}
+
+static void enable_chan(struct mmp_pdma_phy *phy, u32 dcsr_channel_run_bits)
 {
 	u32 reg, dalgn;
 
@@ -167,10 +255,11 @@ static void enable_chan(struct mmp_pdma_phy *phy)
 	writel(dalgn, phy->base + DALGN);
 
 	reg = (phy->idx << 2) + DCSR;
-	writel(readl(phy->base + reg) | DCSR_RUN, phy->base + reg);
+	writel(readl(phy->base + reg) | dcsr_channel_run_bits,
+	       phy->base + reg);
 }
 
-static void disable_chan(struct mmp_pdma_phy *phy)
+static void disable_chan(struct mmp_pdma_phy *phy, u32 dcsr_channel_run_bits)
 {
 	u32 reg;
 
@@ -178,7 +267,8 @@ static void disable_chan(struct mmp_pdma_phy *phy)
 		return;
 
 	reg = (phy->idx << 2) + DCSR;
-	writel(readl(phy->base + reg) & ~DCSR_RUN, phy->base + reg);
+	writel(readl(phy->base + reg) & ~dcsr_channel_run_bits,
+	       phy->base + reg);
 }
 
 static int clear_chan_irq(struct mmp_pdma_phy *phy)
@@ -297,6 +387,7 @@ static void mmp_pdma_free_phy(struct mmp_pdma_chan *pchan)
 static void start_pending_queue(struct mmp_pdma_chan *chan)
 {
 	struct mmp_pdma_desc_sw *desc;
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(chan->chan.device);
 
 	/* still in running, irq will start the pending list */
 	if (!chan->idle) {
@@ -331,8 +422,8 @@ static void start_pending_queue(struct mmp_pdma_chan *chan)
 	 * Program the descriptor's address into the DMA controller,
 	 * then start the DMA transaction
 	 */
-	set_desc(chan->phy, desc->async_tx.phys);
-	enable_chan(chan->phy);
+	pdev->config->set_phy_ddadr(chan->phy, desc->async_tx.phys);
+	enable_chan(chan->phy, pdev->config->dcsr_channel_run_bits);
 	chan->idle = false;
 }
 
@@ -447,6 +538,7 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 		     size_t len, unsigned long flags)
 {
 	struct mmp_pdma_chan *chan;
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	size_t copy = 0;
 
@@ -478,13 +570,20 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 			chan->byte_align = true;
 
 		new->desc.dcmd = chan->dcmd | (DCMD_LENGTH & copy);
-		new->desc.dsadr = dma_src;
-		new->desc.dtadr = dma_dst;
+		pdev->config->split_dma_addr_to_components(&new->desc.dsadr,
+							   &new->desc.dsadrh,
+							   dma_src);
+		pdev->config->split_dma_addr_to_components(&new->desc.dtadr,
+							   &new->desc.dtadrh,
+							   dma_dst);
 
 		if (!first)
 			first = new;
 		else
-			prev->desc.ddadr = new->async_tx.phys;
+			pdev->config->split_dma_addr_to_components(
+					&prev->desc.ddadr,
+					&prev->desc.ddadrh,
+					new->async_tx.phys);
 
 		new->async_tx.cookie = 0;
 		async_tx_ack(&new->async_tx);
@@ -528,6 +627,7 @@ mmp_pdma_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
 		       unsigned long flags, void *context)
 {
 	struct mmp_pdma_chan *chan = to_mmp_pdma_chan(dchan);
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new = NULL;
 	size_t len, avail;
 	struct scatterlist *sg;
@@ -558,18 +658,28 @@ mmp_pdma_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
 			}
 
 			new->desc.dcmd = chan->dcmd | (DCMD_LENGTH & len);
+
 			if (dir == DMA_MEM_TO_DEV) {
-				new->desc.dsadr = addr;
+				pdev->config->split_dma_addr_to_components(
+							&new->desc.dsadr,
+							&new->desc.dsadrh,
+							addr);
 				new->desc.dtadr = chan->dev_addr;
 			} else {
 				new->desc.dsadr = chan->dev_addr;
-				new->desc.dtadr = addr;
+				pdev->config->split_dma_addr_to_components(
+							&new->desc.dtadr,
+							&new->desc.dtadrh,
+							addr);
 			}
 
 			if (!first)
 				first = new;
 			else
-				prev->desc.ddadr = new->async_tx.phys;
+				pdev->config->split_dma_addr_to_components(
+							&prev->desc.ddadr,
+							&prev->desc.ddadrh,
+							new->async_tx.phys);
 
 			new->async_tx.cookie = 0;
 			async_tx_ack(&new->async_tx);
@@ -609,6 +719,7 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 			 unsigned long flags)
 {
 	struct mmp_pdma_chan *chan;
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	dma_addr_t dma_src, dma_dst;
 
@@ -651,13 +762,21 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 
 		new->desc.dcmd = (chan->dcmd | DCMD_ENDIRQEN |
 				  (DCMD_LENGTH & period_len));
-		new->desc.dsadr = dma_src;
-		new->desc.dtadr = dma_dst;
+
+		pdev->config->split_dma_addr_to_components(&new->desc.dsadr,
+							   &new->desc.dsadrh,
+							   dma_src);
+		pdev->config->split_dma_addr_to_components(&new->desc.dtadr,
+							   &new->desc.dtadrh,
+							   dma_dst);
 
 		if (!first)
 			first = new;
 		else
-			prev->desc.ddadr = new->async_tx.phys;
+			pdev->config->split_dma_addr_to_components(
+					&prev->desc.ddadr,
+					&prev->desc.ddadrh,
+					new->async_tx.phys);
 
 		new->async_tx.cookie = 0;
 		async_tx_ack(&new->async_tx);
@@ -678,7 +797,9 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 	first->async_tx.cookie = -EBUSY;
 
 	/* make the cyclic link */
-	new->desc.ddadr = first->async_tx.phys;
+	pdev->config->split_dma_addr_to_components(&new->desc.ddadr,
+						   &new->desc.ddadrh,
+						   first->async_tx.phys);
 	chan->cyclic_first = first;
 
 	return &first->async_tx;
@@ -744,12 +865,13 @@ static int mmp_pdma_config(struct dma_chan *dchan,
 static int mmp_pdma_terminate_all(struct dma_chan *dchan)
 {
 	struct mmp_pdma_chan *chan = to_mmp_pdma_chan(dchan);
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	unsigned long flags;
 
 	if (!dchan)
 		return -EINVAL;
 
-	disable_chan(chan->phy);
+	disable_chan(chan->phy, pdev->config->dcsr_channel_run_bits);
 	mmp_pdma_free_phy(chan);
 	spin_lock_irqsave(&chan->desc_lock, flags);
 	mmp_pdma_free_desc_list(chan, &chan->chain_pending);
@@ -764,7 +886,9 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 				     dma_cookie_t cookie)
 {
 	struct mmp_pdma_desc_sw *sw;
-	u32 curr, residue = 0;
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(chan->chan.device);
+	u64 curr;
+	u32 residue = 0;
 	bool passed = false;
 	bool cyclic = chan->cyclic_first != NULL;
 
@@ -776,17 +900,24 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 		return 0;
 
 	if (chan->dir == DMA_DEV_TO_MEM)
-		curr = readl(chan->phy->base + DTADR(chan->phy->idx));
+		curr = pdev->config->read_iomem_combine_u64(chan->phy->base,
+						DTADR(chan->phy->idx),
+						DTADRH(chan->phy->idx));
 	else
-		curr = readl(chan->phy->base + DSADR(chan->phy->idx));
+		curr = pdev->config->read_iomem_combine_u64(chan->phy->base,
+						DSADR(chan->phy->idx),
+						DSADRH(chan->phy->idx));
 
 	list_for_each_entry(sw, &chan->chain_running, node) {
-		u32 start, end, len;
+		u64 start, end;
+		u32 len;
 
 		if (chan->dir == DMA_DEV_TO_MEM)
-			start = sw->desc.dtadr;
+			start = pdev->config->combine_u64(sw->desc.dtadr,
+							  sw->desc.dtadrh);
 		else
-			start = sw->desc.dsadr;
+			start = pdev->config->combine_u64(sw->desc.dsadr,
+							  sw->desc.dsadrh);
 
 		len = sw->desc.dcmd & DCMD_LENGTH;
 		end = start + len;
@@ -802,7 +933,7 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 		if (passed) {
 			residue += len;
 		} else if (curr >= start && curr <= end) {
-			residue += end - curr;
+			residue += (u32)(end - curr);
 			passed = true;
 		}
 
@@ -996,8 +1127,28 @@ static int mmp_pdma_chan_init(struct mmp_pdma_device *pdev, int idx, int irq)
 	return 0;
 }
 
+static const struct mmp_pdma_config marvell_pdma_v1_config = {
+	.set_phy_ddadr = set_phy_ddadr_32_bits,
+	.split_dma_addr_to_components = split_dma_addr_to_components_32_bits,
+	.combine_u64 = combine_u64_32_bits,
+	.read_iomem_combine_u64 = read_iomem_combine_u64_32_bits,
+	.dcsr_channel_run_bits = (DCSR_RUN),
+	.dma_mask = 0,			/* 0 means it favors            *
+					 * pdev->dev->coherent_dma_mask */
+};
+
+static const struct mmp_pdma_config spacemit_k1_pdma_v1_config = {
+	.set_phy_ddadr = set_phy_ddadr_64_bits,
+	.split_dma_addr_to_components = split_dma_addr_to_components_64_bits,
+	.combine_u64 = combine_u64_64_bits,
+	.read_iomem_combine_u64 = read_iomem_combine_u64_64_bits,
+	.dcsr_channel_run_bits = (DCSR_RUN | DCSR_LPAEEN),
+	.dma_mask = DMA_BIT_MASK(64),	/* support 64 bits address */
+};
+
 static const struct of_device_id mmp_pdma_dt_ids[] = {
-	{ .compatible = "marvell,pdma-1.0", },
+	{ .compatible = "marvell,pdma-1.0", .data = &marvell_pdma_v1_config },
+	{ .compatible = "spacemit,pdma-1.0", .data = &spacemit_k1_pdma_v1_config },
 	{}
 };
 MODULE_DEVICE_TABLE(of, mmp_pdma_dt_ids);
@@ -1049,6 +1200,10 @@ static int mmp_pdma_probe(struct platform_device *op)
 								   NULL);
 	if (IS_ERR(rst))
 		return PTR_ERR(rst);
+
+	pdev->config = of_device_get_match_data(&op->dev);
+	if (!pdev->config)
+		return -ENODEV;
 
 	if (pdev->dev->of_node) {
 		/* Parse new and deprecated dma-channels properties */
@@ -1111,7 +1266,17 @@ static int mmp_pdma_probe(struct platform_device *op)
 	pdev->device.directions = BIT(DMA_MEM_TO_DEV) | BIT(DMA_DEV_TO_MEM);
 	pdev->device.residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
 
-	if (pdev->dev->coherent_dma_mask)
+	/* TODO: this code is logically correct to both spacemit and marvell.
+	 * is there a better way to set dma mask?
+	 *
+-	if (pdev->dev->coherent_dma_mask)
+-		dma_set_mask(pdev->dev, pdev->dev->coherent_dma_mask);
+-	else
+-		dma_set_mask(pdev->dev, DMA_BIT_MASK(64));
+	 */
+	if (pdev->config->dma_mask)
+		dma_set_mask(pdev->dev, pdev->config->dma_mask);
+	else if (pdev->dev->coherent_dma_mask)
 		dma_set_mask(pdev->dev, pdev->dev->coherent_dma_mask);
 	else
 		dma_set_mask(pdev->dev, DMA_BIT_MASK(64));
