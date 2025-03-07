@@ -148,8 +148,15 @@ struct mmp_pdma_config {
 	u64 dma_mask;
 };
 
+struct reserved_chan{
+	int	chan_id;
+	int	drcmr;
+};
+
 struct mmp_pdma_device {
 	int				dma_channels;
+	int				nr_reserved_channels;
+	struct reserved_chan		*reserved_channels;
 	struct clk			*clk;
 	struct reset_control		*resets;
 	int				max_burst_size;
@@ -288,6 +295,35 @@ static irqreturn_t mmp_pdma_chan_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static bool is_channel_reserved(struct mmp_pdma_device *pdev, int chan_id)
+{
+	int i;
+
+	for (i = 0; i < pdev->nr_reserved_channels; i++) {
+		if (chan_id == pdev->reserved_channels[i].chan_id)
+			return true;
+	}
+
+	return false;
+}
+
+static struct mmp_pdma_phy * lookup_phy_for_drcmr(struct mmp_pdma_device *pdev, int drcmr)
+{
+	int i;
+	int chan_id;
+	struct mmp_pdma_phy *phy;
+
+	for (i = 0; i < pdev->nr_reserved_channels; i++) {
+		if (drcmr == pdev->reserved_channels[i].drcmr) {
+			chan_id = pdev->reserved_channels[i].chan_id;
+			phy = &pdev->phy[chan_id];
+			return phy;
+		}
+	}
+
+	return NULL;
+}
+
 static irqreturn_t mmp_pdma_int_handler(int irq, void *dev_id)
 {
 	struct mmp_pdma_device *pdev = dev_id;
@@ -331,9 +367,24 @@ static struct mmp_pdma_phy *lookup_phy(struct mmp_pdma_chan *pchan)
 	 */
 
 	spin_lock_irqsave(&pdev->phy_lock, flags);
+
+	phy = lookup_phy_for_drcmr(pdev, pchan->drcmr);
+
+	if (phy != NULL) {
+		if (!phy->vchan) {
+			phy->vchan = pchan;
+			found = phy;
+		}
+
+		goto out_unlock;
+	}
+
 	for (prio = 0; prio <= ((pdev->dma_channels - 1) & 0xf) >> 2; prio++) {
 		for (i = 0; i < pdev->dma_channels; i++) {
 			if (prio != (i & 0xf) >> 2)
+				continue;
+
+			if (is_channel_reserved(pdev, i))
 				continue;
 			phy = &pdev->phy[i];
 			if (!phy->vchan) {
@@ -1103,6 +1154,7 @@ static void mmp_pdma_remove(struct platform_device *op)
 	}
 
 	dma_async_device_unregister(&pdev->device);
+	kfree(pdev->reserved_channels);
 }
 
 static int mmp_pdma_chan_init(struct mmp_pdma_device *pdev, int idx, int irq)
@@ -1194,6 +1246,8 @@ static int mmp_pdma_probe(struct platform_device *op)
 		DMA_SLAVE_BUSWIDTH_1_BYTE   | DMA_SLAVE_BUSWIDTH_2_BYTES |
 		DMA_SLAVE_BUSWIDTH_4_BYTES;
 
+	int nr_reserved_channels;
+	const int *list;
 	unsigned int max_burst_size = DEFAULT_MAX_BURST_SIZE;
 
 	pdev = devm_kzalloc(&op->dev, sizeof(*pdev), GFP_KERNEL);
@@ -1227,6 +1281,10 @@ static int mmp_pdma_probe(struct platform_device *op)
 	of_id = of_match_device(mmp_pdma_dt_ids, pdev->dev);
 
 	if (of_id) {
+		int n;
+		list = of_get_property(pdev->dev->of_node, "reserved-channels",
+			&n);
+
 		if (of_property_read_u32(pdev->dev->of_node, "max-burst-size",
 		    &max_burst_size)) {
 			dev_err(pdev->dev, "Cannot find the max-burst-size node "
@@ -1240,6 +1298,28 @@ static int mmp_pdma_probe(struct platform_device *op)
 				       "in the device tree, set it to %d\n",
 					max_burst_size, DEFAULT_MAX_BURST_SIZE);
 			max_burst_size = DEFAULT_MAX_BURST_SIZE;
+		}
+		if (list) {
+			int num_args = 2;
+
+			nr_reserved_channels = n / (sizeof(u32) * num_args);
+
+			pdev->nr_reserved_channels = nr_reserved_channels;
+
+			pdev->reserved_channels = kzalloc(nr_reserved_channels * sizeof(struct reserved_chan),
+							GFP_KERNEL);
+
+			if (pdev->reserved_channels == NULL)
+				return -ENOMEM;
+
+			for (i = 0; i < nr_reserved_channels; i++) {
+				int value;
+
+				of_property_read_u32_index(pdev->dev->of_node, "reserved-channels", i * num_args, &value);
+				pdev->reserved_channels[i].chan_id = value;
+				of_property_read_u32_index(pdev->dev->of_node, "reserved-channels", i * num_args + 1, &value);
+				pdev->reserved_channels[i].drcmr   = value;
+			}
 		}
 	}
 
