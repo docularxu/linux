@@ -16,6 +16,7 @@
 #include <linux/platform_data/mmp_dma.h>
 #include <linux/dmapool.h>
 #include <linux/clk.h>
+#include <linux/reset.h>
 #include <linux/of_dma.h>
 #include <linux/of.h>
 
@@ -145,6 +146,7 @@ struct mmp_pdma_config {
 struct mmp_pdma_device {
 	int				dma_channels;
 	struct clk			*clk;
+	struct reset_control		*resets;
 	void __iomem			*base;
 	struct device			*dev;
 	struct dma_device		device;
@@ -1029,6 +1031,8 @@ static void mmp_pdma_remove(struct platform_device *op)
 	}
 
 	dma_async_device_unregister(&pdev->device);
+
+	reset_control_assert(pdev->resets);
 	clk_disable_unprepare(pdev->clk);
 }
 
@@ -1136,6 +1140,15 @@ static int mmp_pdma_probe(struct platform_device *op)
 		return dev_err_probe(pdev->dev, ret,
 				     "could not enable dma clock\n");
 
+	pdev->resets = devm_reset_control_get_optional(pdev->dev,NULL);
+	if(IS_ERR(pdev->resets)) {
+		ret = PTR_ERR(pdev->resets);
+		goto err_rst;
+	}
+	ret = reset_control_deassert(pdev->resets);
+	if(ret)
+		goto err_rst;
+
 	if (pdev->dev->of_node) {
 		/* Parse new and deprecated dma-channels properties */
 		if (of_property_read_u32(pdev->dev->of_node, "dma-channels",
@@ -1232,6 +1245,10 @@ static int mmp_pdma_probe(struct platform_device *op)
 	platform_set_drvdata(op, pdev);
 	dev_info(pdev->device.dev, "initialized %d channels\n", dma_channels);
 	return 0;
+
+err_rst:
+	clk_disable_unprepare(pdev->clk);
+	return ret;
 }
 
 static const struct platform_device_id mmp_pdma_id_table[] = {
