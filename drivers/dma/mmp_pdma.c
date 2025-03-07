@@ -20,6 +20,11 @@
 
 #include "dmaengine.h"
 
+#define DDADRH(n)	(0x0300 + ((n) << 4))
+#define DSADRH(n)	(0x0304 + ((n) << 4))
+#define DTADRH(n)	(0x0308 + ((n) << 4))
+#define DCSR_LPAEEN	BIT(21)	/* Long Physical Address Extension enable */
+
 #define DCSR		0x0000
 #define DALGN		0x00a0
 #define DINT		0x00f0
@@ -69,12 +74,25 @@
 
 #define PDMA_MAX_DESC_BYTES	DCMD_LENGTH
 
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+struct mmp_pdma_desc_hw {
+	u32 ddadr;	/* Points to the next descriptor + flags */
+	u32 dsadr;	/* DSADR value for the current transfer */
+	u32 dtadr;	/* DTADR value for the current transfer */
+	u32 dcmd;	/* DCMD value for the current transfer */
+	u32 ddadrh;	/* Points to the next descriptor + flags */
+	u32 dsadrh;	/* DSADR value for the current transfer */
+	u32 dtadrh;	/* DTADR value for the current transfer */
+	u32 rsvd;	/* DCMD value for the current transfer */
+} __aligned(64);
+#else
 struct mmp_pdma_desc_hw {
 	u32 ddadr;	/* Points to the next descriptor + flags */
 	u32 dsadr;	/* DSADR value for the current transfer */
 	u32 dtadr;	/* DTADR value for the current transfer */
 	u32 dcmd;	/* DCMD value for the current transfer */
 } __aligned(32);
+#endif
 
 struct mmp_pdma_desc_sw {
 	struct mmp_pdma_desc_hw desc;
@@ -148,9 +166,17 @@ static int mmp_pdma_config_write(struct dma_chan *dchan,
 
 static void set_desc(struct mmp_pdma_phy *phy, dma_addr_t addr)
 {
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	u32 ddadrh;
+#endif
 	u32 reg = (phy->idx << 4) + DDADR;
 
-	writel(addr, phy->base + reg);
+	writel(addr & 0xffffffff, phy->base + reg);
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	/* config higher bits for desc address */
+	ddadrh = (addr >> 32);
+	writel(ddadrh, phy->base + DDADRH(phy->idx));
+#endif
 }
 
 static void enable_chan(struct mmp_pdma_phy *phy)
@@ -171,7 +197,12 @@ static void enable_chan(struct mmp_pdma_phy *phy)
 	writel(dalgn, phy->base + DALGN);
 
 	reg = (phy->idx << 2) + DCSR;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	/* use long descriptor mode: set DCSR_LPAEEN bit */
+	writel(readl(phy->base + reg) | DCSR_RUN | DCSR_LPAEEN, phy->base + reg);
+#else
 	writel(readl(phy->base + reg) | DCSR_RUN, phy->base + reg);
+#endif
 }
 
 static void disable_chan(struct mmp_pdma_phy *phy)
@@ -182,7 +213,12 @@ static void disable_chan(struct mmp_pdma_phy *phy)
 		return;
 
 	reg = (phy->idx << 2) + DCSR;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	/* use long descriptor mode: set DCSR_LPAEEN bit */
+	writel(readl(phy->base + reg) & ~(DCSR_RUN | DCSR_LPAEEN), phy->base + reg);
+#else
 	writel(readl(phy->base + reg) & ~DCSR_RUN, phy->base + reg);
+#endif
 }
 
 static int clear_chan_irq(struct mmp_pdma_phy *phy)
@@ -482,13 +518,45 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 			chan->byte_align = true;
 
 		new->desc.dcmd = chan->dcmd | (DCMD_LENGTH & copy);
-		new->desc.dsadr = dma_src;
-		new->desc.dtadr = dma_dst;
+
+		/*
+		 * Check whether descriptor/source-addr/target-addr is in
+		 * region higher than 4G. If so, set related higher bits to 1.
+		 */
+		if (chan->dir == DMA_MEM_TO_DEV) {
+			new->desc.dsadr = dma_src & 0xffffffff;
+			new->desc.dtadr = dma_dst;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+			new->desc.dsadrh = (dma_src >> 32);
+			new->desc.dtadrh = 0;
+#endif
+		} else if (chan->dir == DMA_DEV_TO_MEM) {
+			new->desc.dsadr = dma_src;
+			new->desc.dtadr = dma_dst & 0xffffffff;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+			new->desc.dsadrh = 0;
+			new->desc.dtadrh = (dma_dst >> 32);
+#endif
+		} else if (chan->dir == DMA_MEM_TO_MEM) {
+			new->desc.dsadr = dma_src & 0xffffffff;
+			new->desc.dtadr = dma_dst & 0xffffffff;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+			new->desc.dsadrh = (dma_src >> 32);
+			new->desc.dtadrh = (dma_dst >> 32);
+#endif
+		} else {
+			dev_err(chan->dev, "wrong direction: 0x%x\n", chan->dir);
+			goto fail;
+		}
 
 		if (!first)
 			first = new;
-		else
+		else {
 			prev->desc.ddadr = new->async_tx.phys;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+			prev->desc.ddadrh = (new->async_tx.phys >> 32);
+#endif
+		}
 
 		new->async_tx.cookie = 0;
 		async_tx_ack(&new->async_tx);
@@ -562,18 +630,38 @@ mmp_pdma_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
 			}
 
 			new->desc.dcmd = chan->dcmd | (DCMD_LENGTH & len);
+
+			/*
+			 * Check whether descriptor/source-addr/target-addr is in
+			 * region higher than 4G. If so, set related higher bits to 1.
+			 */
 			if (dir == DMA_MEM_TO_DEV) {
-				new->desc.dsadr = addr;
+				new->desc.dsadr = addr & 0xffffffff;
 				new->desc.dtadr = chan->dev_addr;
-			} else {
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+				new->desc.dsadrh = (addr >> 32);
+				new->desc.dtadrh = 0;
+#endif
+			} else if (dir == DMA_DEV_TO_MEM) {
 				new->desc.dsadr = chan->dev_addr;
-				new->desc.dtadr = addr;
+				new->desc.dtadr = addr & 0xffffffff;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+				new->desc.dsadrh = 0;
+				new->desc.dtadrh = (addr >> 32);
+#endif
+			} else {
+				dev_err(chan->dev, "wrong direction: 0x%x\n", chan->dir);
+				goto fail;
 			}
 
 			if (!first)
 				first = new;
-			else
+			else {
 				prev->desc.ddadr = new->async_tx.phys;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+				prev->desc.ddadrh = (new->async_tx.phys >> 32);
+#endif
+			}
 
 			new->async_tx.cookie = 0;
 			async_tx_ack(&new->async_tx);
@@ -615,6 +703,9 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 	struct mmp_pdma_chan *chan;
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	dma_addr_t dma_src, dma_dst;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	dma_addr_t dma_srch, dma_dsth;
+#endif
 
 	if (!dchan || !len || !period_len)
 		return NULL;
@@ -631,12 +722,20 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 
 	switch (direction) {
 	case DMA_MEM_TO_DEV:
-		dma_src = buf_addr;
+		dma_src = buf_addr & 0xffffffff;
 		dma_dst = chan->dev_addr;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+		dma_srch = (buf_addr >> 32);
+		dma_dsth = 0;
+#endif
 		break;
 	case DMA_DEV_TO_MEM:
-		dma_dst = buf_addr;
+		dma_dst = buf_addr & 0xffffffff;
 		dma_src = chan->dev_addr;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+		dma_dsth = (buf_addr >> 32);
+		dma_srch = 0;
+#endif
 		break;
 	default:
 		dev_err(chan->dev, "Unsupported direction for cyclic DMA\n");
@@ -657,11 +756,19 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 				  (DCMD_LENGTH & period_len));
 		new->desc.dsadr = dma_src;
 		new->desc.dtadr = dma_dst;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+		new->desc.dsadrh = dma_dsth;
+		new->desc.dtadrh = dma_srch;
+#endif
 
 		if (!first)
 			first = new;
-		else
+		else {
 			prev->desc.ddadr = new->async_tx.phys;
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+			prev->desc.ddadrh = (new->async_tx.phys >> 32);
+#endif
+		}
 
 		new->async_tx.cookie = 0;
 		async_tx_ack(&new->async_tx);
@@ -1117,10 +1224,11 @@ static int mmp_pdma_probe(struct platform_device *op)
 	pdev->device.directions = BIT(DMA_MEM_TO_DEV) | BIT(DMA_DEV_TO_MEM);
 	pdev->device.residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
 
-	if (pdev->dev->coherent_dma_mask)
-		dma_set_mask(pdev->dev, pdev->dev->coherent_dma_mask);
-	else
-		dma_set_mask(pdev->dev, DMA_BIT_MASK(64));
+#ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	dma_set_mask(pdev->dev, DMA_BIT_MASK(64));
+#else
+	dma_set_mask(pdev->dev, pdev->dev->coherent_dma_mask);
+#endif
 
 	ret = dma_async_device_register(&pdev->device);
 	if (ret) {
