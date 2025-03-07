@@ -15,8 +15,15 @@
 #include <linux/device.h>
 #include <linux/platform_data/mmp_dma.h>
 #include <linux/dmapool.h>
+#include <linux/clk.h>
+#include <linux/reset.h>
+#include <linux/of_device.h>
 #include <linux/of_dma.h>
 #include <linux/of.h>
+
+#include <linux/delay.h>
+#include <linux/pm_runtime.h>
+#include <linux/pm_qos.h>
 
 #include "dmaengine.h"
 
