@@ -26,6 +26,7 @@
 #define DSADRH(n)	(0x0304 + ((n) << 4))
 #define DTADRH(n)	(0x0308 + ((n) << 4))
 #define DCSR_LPAEEN	BIT(21)	/* Long Physical Address Extension enable */
+#define DCMD_BURST64	(4 << 16)	/* 64 byte burst */
 
 #define DCSR		0x0000
 #define DALGN		0x00a0
@@ -151,6 +152,7 @@ struct mmp_pdma_device {
 	int				dma_channels;
 	struct clk			*clk;
 	struct reset_control		*resets;
+	int				max_burst_size;
 	void __iomem			*base;
 	struct device			*dev;
 	struct dma_device		device;
@@ -518,6 +520,25 @@ static void mmp_pdma_free_chan_resources(struct dma_chan *dchan)
 	return;
 }
 
+#define INVALID_BURST_SETTING	-1
+#define DEFAULT_MAX_BURST_SIZE	32
+
+static int get_max_burst_setting(unsigned int max_burst_size)
+{
+	switch (max_burst_size) {
+	case 8:
+		return DCMD_BURST8;
+	case 16:
+		return DCMD_BURST16;
+	case 32:
+		return DCMD_BURST32;
+	case 64:
+		return DCMD_BURST64;
+	default:
+		return INVALID_BURST_SETTING;
+	}
+}
+
 static struct dma_async_tx_descriptor *
 mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 		     dma_addr_t dma_dst, dma_addr_t dma_src,
@@ -527,6 +548,8 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	size_t copy = 0;
+	struct mmp_pdma_device *dev;
+	int value;
 
 	if (!dchan)
 		return NULL;
@@ -540,7 +563,12 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 	if (!chan->dir) {
 		chan->dir = DMA_MEM_TO_MEM;
 		chan->dcmd = DCMD_INCTRGADDR | DCMD_INCSRCADDR;
-		chan->dcmd |= DCMD_BURST32;
+		dev = to_mmp_pdma_dev(dchan->device);
+		value = get_max_burst_setting(dev->max_burst_size);
+
+		BUG_ON(value == INVALID_BURST_SETTING);
+
+		chan->dcmd |= value;
 	}
 
 	do {
@@ -1158,12 +1186,15 @@ static struct dma_chan *mmp_pdma_dma_xlate(struct of_phandle_args *dma_spec,
 static int mmp_pdma_probe(struct platform_device *op)
 {
 	struct mmp_pdma_device *pdev;
+	const struct of_device_id *of_id;
 	struct mmp_dma_platdata *pdata = dev_get_platdata(&op->dev);
 	int i, ret, irq = 0;
 	int dma_channels = 0, irq_num = 0;
 	const enum dma_slave_buswidth widths =
 		DMA_SLAVE_BUSWIDTH_1_BYTE   | DMA_SLAVE_BUSWIDTH_2_BYTES |
 		DMA_SLAVE_BUSWIDTH_4_BYTES;
+
+	unsigned int max_burst_size = DEFAULT_MAX_BURST_SIZE;
 
 	pdev = devm_kzalloc(&op->dev, sizeof(*pdev), GFP_KERNEL);
 	if (!pdev)
@@ -1192,6 +1223,26 @@ static int mmp_pdma_probe(struct platform_device *op)
 		return dev_err_probe(pdev->dev, PTR_ERR(pdev->resets),
 				     "could not get and deassert resets\n");
 
+	/* FIXME: unnecessary to define a 'of_id' and checking of_match_device() */
+	of_id = of_match_device(mmp_pdma_dt_ids, pdev->dev);
+
+	if (of_id) {
+		if (of_property_read_u32(pdev->dev->of_node, "max-burst-size",
+		    &max_burst_size)) {
+			dev_err(pdev->dev, "Cannot find the max-burst-size node "
+				       "in the device tree, set it to %d\n",
+				       DEFAULT_MAX_BURST_SIZE);
+			max_burst_size = DEFAULT_MAX_BURST_SIZE;
+		}
+
+		if (get_max_burst_setting(max_burst_size) == INVALID_BURST_SETTING) {
+			dev_err(pdev->dev, "Unsupported max-burst-size value %d "
+				       "in the device tree, set it to %d\n",
+					max_burst_size, DEFAULT_MAX_BURST_SIZE);
+			max_burst_size = DEFAULT_MAX_BURST_SIZE;
+		}
+	}
+
 	if (pdev->dev->of_node) {
 		/* Parse new and deprecated dma-channels properties */
 		if (of_property_read_u32(pdev->dev->of_node, "dma-channels",
@@ -1204,6 +1255,9 @@ static int mmp_pdma_probe(struct platform_device *op)
 		dma_channels = 32;	/* default 32 channel */
 	}
 	pdev->dma_channels = dma_channels;
+
+	pdev->max_burst_size = max_burst_size;
+	dev_dbg(pdev->dev, "set max burst size to %d\n", max_burst_size);
 
 	for (i = 0; i < dma_channels; i++) {
 		if (platform_get_irq_optional(op, i) > 0)
