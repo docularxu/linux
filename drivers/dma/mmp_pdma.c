@@ -524,6 +524,9 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 		 * Check whether descriptor/source-addr/target-addr is in
 		 * region higher than 4G. If so, set related higher bits to 1.
 		 */
+		/* FIXME - BUG: chan->dir is MEM_TO_MEM 100%, no need to
+		 *              check if(MEM_TO_DEV or DEV_TO_MEM)
+		 */
 		if (chan->dir == DMA_MEM_TO_DEV) {
 			new->desc.dsadr = dma_src & 0xffffffff;
 			new->desc.dtadr = dma_dst;
@@ -553,6 +556,11 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 		if (!first)
 			first = new;
 		else {
+			/* FIXME -  * @phys: physical address of the descriptor, with type 'dma_addr_t'
+			 *      It can be 64 bits address.
+			 *      BUG: when assigning a 64 bits adderess to a 32 bit variable (ie. u32 desc.ddadr)
+			 *          Should we mask it with BIT_MASK(32)?
+			 */
 			prev->desc.ddadr = new->async_tx.phys;
 #ifdef CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
 			prev->desc.ddadrh = (new->async_tx.phys >> 32);
@@ -790,6 +798,12 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 	first->async_tx.cookie = -EBUSY;
 
 	/* make the cyclic link */
+	/* FIXME - BUG: missing handling of new->desc.ddadrh, the higher 32bits
+	 * eg:
+	 * #ifdef   CONFIG_SPACEMIT_PDMA_SUPPORT_64BIT
+	 *                     new->desc.ddadrh = (first->async_tx.phys >> 32);
+	 * #endif
+	 */
 	new->desc.ddadr = first->async_tx.phys;
 	chan->cyclic_first = first;
 
@@ -887,6 +901,8 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 	if (!chan->phy)
 		return 0;
 
+
+	/* FIXME: why this doesn't take count of DSADRH and DTADRH? for 64bits */
 	if (chan->dir == DMA_DEV_TO_MEM)
 		curr = readl(chan->phy->base + DTADR(chan->phy->idx));
 	else
@@ -896,7 +912,7 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 		u32 start, end, len;
 
 		if (chan->dir == DMA_DEV_TO_MEM)
-			start = sw->desc.dtadr;
+			start = sw->desc.dtadr; /* FIXME: didn't check the DTADRH, upper 32bits, why */
 		else
 			start = sw->desc.dsadr;
 
