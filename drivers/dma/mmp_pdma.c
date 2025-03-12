@@ -118,13 +118,19 @@ struct mmp_pdma_phy {
 	struct mmp_pdma_chan *vchan;
 };
 
+struct mmp_pdma_config {
+	bool support_64bit;
+};
+
 struct mmp_pdma_device {
 	int				dma_channels;
 	void __iomem			*base;
 	struct device			*dev;
 	struct dma_device		device;
 	struct mmp_pdma_phy		*phy;
-	spinlock_t phy_lock; /* protect alloc/free phy channels */
+	spinlock_t			phy_lock; /* protect alloc/free *
+						   * phy channels       */
+	const struct mmp_pdma_config 	*config;
 };
 
 #define tx_to_mmp_pdma_desc(tx)					\
@@ -994,9 +1000,17 @@ static int mmp_pdma_chan_init(struct mmp_pdma_device *pdev, int idx, int irq)
 	return 0;
 }
 
+static const struct mmp_pdma_config marvell_pdma_v1_config = {
+	.support_64bit = false,
+};
+
+static const struct mmp_pdma_config spacemit_k1_pdma_v1_config = {
+	.support_64bit = true,
+};
+
 static const struct of_device_id mmp_pdma_dt_ids[] = {
-	{ .compatible = "marvell,pdma-1.0", },
-	{ .compatible = "spacemit,pdma-1.0", },
+	{ .compatible = "marvell,pdma-1.0", .data = &marvell_pdma_v1_config },
+	{ .compatible = "spacemit,pdma-1.0", .data = &spacemit_k1_pdma_v1_config },
 	{}
 };
 MODULE_DEVICE_TABLE(of, mmp_pdma_dt_ids);
@@ -1037,6 +1051,10 @@ static int mmp_pdma_probe(struct platform_device *op)
 	pdev->base = devm_platform_ioremap_resource(op, 0);
 	if (IS_ERR(pdev->base))
 		return PTR_ERR(pdev->base);
+
+	pdev->config = of_device_get_match_data(&op->dev);
+	if(!pdev->config)
+		return -ENODEV;
 
 	if (pdev->dev->of_node) {
 		/* Parse new and deprecated dma-channels properties */
