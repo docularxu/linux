@@ -96,3 +96,7 @@
 		reset-gpios = <&gpio K1_GPIO(124) GPIO_ACTIVE_LOW>;
 	};
 };
+
+&pdma0 {
+	status = "okay";
+};
