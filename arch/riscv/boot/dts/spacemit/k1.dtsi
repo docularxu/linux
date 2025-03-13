@@ -740,5 +740,10 @@
 			resets = <&syscon_apbc RST_PWM19>;
 			status = "disabled";
 		};
+
+		pwm_bl: lcd_backlight {
+			compatible = "pwm-backlight";
+			status = "disabled";
+		};
 	};
 };
