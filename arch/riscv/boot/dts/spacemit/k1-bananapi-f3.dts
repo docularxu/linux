@@ -67,3 +67,7 @@
 	pinctrl-0 = <&pwm14_1_cfg>;
 	status = "disabled";
 };
+
+&pdma0 {
+	status = "okay";
+};
