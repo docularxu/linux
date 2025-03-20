@@ -53,7 +53,8 @@ MODULE_DEVICE_TABLE(platform, pwm_id_table);
 struct pxa_pwm_chip {
 	struct device	*dev;
 
-	struct clk	*clk;
+	struct clk	*clk;      /* Functional clock */
+	struct clk	*bus_clk;  /* Bus interface clock */
 	struct reset_control	*reset;
 	void __iomem	*mmio_base;
 };
