@@ -694,6 +694,8 @@
 			compatible = "spacemit,k1-pwm";
 			reg = <0x0 0xd4021800 0x0 0x10>;
 			#pwm-cells = <1>;
+			clocks = <&syscon_apbc CLK_PWM14>;
+			resets = <&syscon_apbc RST_PWM14>;
 /* 			clocks = <&ccu CLK_PWM14>; */
 /* 			resets = <&reset RESET_PWM14>; */
 			status = "disabled";
