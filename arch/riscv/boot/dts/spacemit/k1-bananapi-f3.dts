@@ -52,7 +52,7 @@
 			240 241 242 243 244 245 246 247 248 249 250 251 252 253 254 255
 		>;
 		default-brightness-level = <100>;
-		status = "disabled";
+		status = "okay";
 	};
 };
 
@@ -65,5 +65,5 @@
 &pwm14 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pwm14_1_cfg>;
-	status = "disabled";
+	status = "okay";
 };
