@@ -18,6 +18,7 @@ properties:
       - marvell,pdma-1.0
       - marvell,adma-1.0
       - marvell,pxa910-squ
+      - spacemit,pdma-1.0
 
   reg:
     maxItems: 1
@@ -31,6 +32,14 @@ properties:
     description:
       A phandle to the SRAM pool
     $ref: /schemas/types.yaml#/definitions/phandle
+
+  clocks:
+    description: Clock for the controller
+    maxItems: 1
+
+  resets:
+    description: Reset controller for the DMA controller
+    maxItems: 1
 
   '#dma-channels':
     deprecated: true
