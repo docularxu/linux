@@ -17,6 +17,7 @@
 #include <linux/dmapool.h>
 #include <linux/clk.h>
 #include <linux/reset.h>
+#include <linux/of_device.h>
 #include <linux/of_dma.h>
 #include <linux/of.h>
 
@@ -1236,6 +1237,16 @@ static int mmp_pdma_probe(struct platform_device *op)
 		goto err_rst;
 
 	/* FIXME: unnecessary to define a 'of_id' and checking of_match_device() */
+	/* commit c48de45d4cefc5a2f0d0e4101c39884326ac704c
+Author: Rob Herring <robh@kernel.org>
+Date:   Fri Oct 6 16:38:35 2023 -0500
+
+    dmaengine: Drop unnecessary of_match_device() calls
+    
+    If probe is reached, we've already matched the device and in the case of
+    DT matching, the struct device_node pointer will be set. Therefore, there
+    is no need to call of_match_device() in probe.
+    */
 	of_id = of_match_device(mmp_pdma_dt_ids, pdev->dev);
 
 	if (of_id) {
