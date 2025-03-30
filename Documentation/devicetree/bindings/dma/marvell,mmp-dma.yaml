@@ -37,6 +37,10 @@ properties:
     description: Clock for the controller
     maxItems: 1
 
+  resets:
+    description: Reset controller for the DMA controller
+    maxItems: 1
+
   '#dma-channels':
     deprecated: true
 
