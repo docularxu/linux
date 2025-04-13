@@ -136,6 +136,10 @@ struct mmp_pdma_phy {
 struct mmp_pdma_config {
 	void (*set_phy_ddadr)(struct mmp_pdma_phy *phy, dma_addr_t addr);
 	void (*set_desc_adr)(u32 *lower, u32 *upper, dma_addr_t addr);
+	u64 (*read64_desc_adr)(void __iomem *base,
+			       u32 low_offset,
+			       u32 high_offset);
+	u64 (*combine_u64)(u32 lower, u32 upper);
 	u32 dcsr_enable_chan;		/* DCSR bits to set/clear when  *
 					 * enabling/disabling a channel */
 	u64 dma_mask;
@@ -188,6 +192,35 @@ static void set_phy_ddadr_64_bits(struct mmp_pdma_phy *phy, dma_addr_t addr)
 	writel(upper_32_bits(addr), phy->base + DDADRH(phy->idx));
 }
 
+/* read from physical addresses */
+static u64 read64_desc_adr_64_bits(void __iomem *base,
+				   u32 low_offset,
+				   u32 high_offset)
+{
+	u32 low = readl(base + low_offset);
+	u32 high = readl(base + high_offset);
+
+	return ((u64)high << 32) | low;
+}
+
+static u64 read64_desc_adr_32_bits(void __iomem *base,
+				   u32 low_offset,
+				   u32 high_offset __maybe_unused)
+{
+	return readl(base + low_offset);
+}
+
+static u64 combine_u64_32_bits(u32 lower, u32 upper __maybe_unused)
+{
+	return lower;
+}
+
+static u64 combine_u64_64_bits(u32 lower, u32 upper)
+{
+	return ((u64)upper << 32) | lower;
+}
+
+/* TODO: merge these two functions into set_desc_adr_32/64_bits */
 static void enable_chan(struct mmp_pdma_phy *phy, u32 dcsr_enable_chan)
 {
 	u32 reg, dalgn;
@@ -830,7 +863,9 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 				     dma_cookie_t cookie)
 {
 	struct mmp_pdma_desc_sw *sw;
-	u32 curr, residue = 0;
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(chan->chan.device);
+	u64 curr;
+	u32 residue = 0;
 	bool passed = false;
 	bool cyclic = chan->cyclic_first != NULL;
 
@@ -841,20 +876,29 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 	if (!chan->phy)
 		return 0;
 
-	/* TODO: FIXME: why this doesn't take count of DSADRH and DTADRH? for 64bits */
-
+	/* TODO: double check:
+	 * FIXME: this takes count of DSADRH and DTADRH? for 64bits */
 	if (chan->dir == DMA_DEV_TO_MEM)
-		curr = readl(chan->phy->base + DTADR(chan->phy->idx));
+		curr = pdev->config->read64_desc_adr(chan->phy->base,
+						DTADR(chan->phy->idx),
+						DTADRH(chan->phy->idx));
 	else
-		curr = readl(chan->phy->base + DSADR(chan->phy->idx));
+		curr = pdev->config->read64_desc_adr(chan->phy->base,
+						DSADR(chan->phy->idx),
+						DSADRH(chan->phy->idx));
 
 	list_for_each_entry(sw, &chan->chain_running, node) {
-		u32 start, end, len;
+		u64 start, end;
+		u32 len;
 
+		/* TODO: double-check:
+		 * FIXME: combine DTADRH, for 64bit address support */
 		if (chan->dir == DMA_DEV_TO_MEM)
-			start = sw->desc.dtadr;  /* TODO: FIXME: didn't check the DTADRH, upper 32bits, why */
+			start = pdev->config->combine_u64(sw->desc.dtadr,
+							  sw->desc.dtadrh);
 		else
-			start = sw->desc.dsadr;
+			start = pdev->config->combine_u64(sw->desc.dsadr,
+							  sw->desc.dsadrh);
 
 		len = sw->desc.dcmd & DCMD_LENGTH;
 		end = start + len;
@@ -870,7 +914,7 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 		if (passed) {
 			residue += len;
 		} else if (curr >= start && curr <= end) {
-			residue += end - curr;
+			residue += (u32)(end - curr);
 			passed = true;
 		}
 
@@ -1067,6 +1111,8 @@ static int mmp_pdma_chan_init(struct mmp_pdma_device *pdev, int idx, int irq)
 static const struct mmp_pdma_config marvell_pdma_v1_config = {
 	.set_phy_ddadr = set_phy_ddadr_32_bits,
 	.set_desc_adr = set_desc_adr_32_bits,
+	.read64_desc_adr = read64_desc_adr_32_bits,
+	.combine_u64 = combine_u64_32_bits,
 	.dcsr_enable_chan = (DCSR_RUN),
 	.dma_mask = 0,			/* 0 means it favors            *
 					 * pdev->dev->coherent_dma_mask */
@@ -1075,6 +1121,8 @@ static const struct mmp_pdma_config marvell_pdma_v1_config = {
 static const struct mmp_pdma_config spacemit_k1_pdma_v1_config = {
 	.set_phy_ddadr = set_phy_ddadr_64_bits,
 	.set_desc_adr = set_desc_adr_64_bits,
+	.read64_desc_adr = read64_desc_adr_64_bits,
+	.combine_u64 = combine_u64_64_bits,
 	/* use long descriptor mode: set DCSR_LPAEEN bit */
 	.dcsr_enable_chan = (DCSR_RUN | DCSR_LPAEEN |
 			     DCSR_EORIRQEN | DCSR_EORSTOPEN),
