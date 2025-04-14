@@ -21,6 +21,9 @@
 #include <linux/of_dma.h>
 #include <linux/of.h>
 
+#include <linux/pm_runtime.h>
+#include <linux/pm_qos.h>
+
 #include "dmaengine.h"
 
 #define DDADRH(n)	(0x0300 + ((n) << 4))
@@ -128,6 +131,9 @@ struct mmp_pdma_chan {
 	bool idle;			/* channel statue machine */
 	bool byte_align;
 
+	int user_do_qos;
+	int qos_count; /* Per-channel qos count */
+
 	struct dma_pool *desc_pool;	/* Descriptors pool */
 };
 
@@ -178,6 +184,9 @@ struct mmp_pdma_device {
 	container_of(dchan, struct mmp_pdma_chan, chan)
 #define to_mmp_pdma_dev(dmadev)					\
 	container_of(dmadev, struct mmp_pdma_device, device)
+
+static void mmp_pdma_qos_get(struct mmp_pdma_chan *chan);
+static void mmp_pdma_qos_put(struct mmp_pdma_chan *chan);
 
 static int mmp_pdma_config_write(struct dma_chan *dchan,
 			   struct dma_slave_config *cfg,
@@ -914,6 +923,20 @@ static int mmp_pdma_config_write(struct dma_chan *dchan,
 	return 0;
 }
 
+static int mmp_pdma_pause_chan(struct dma_chan *dchan)
+{
+	struct mmp_pdma_chan *chan = to_mmp_pdma_chan(dchan);
+	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
+
+	if (!chan->phy)
+		return -1;
+
+	disable_chan(chan->phy, pdev->config->dcsr_enable_chan);
+	chan->status = DMA_PAUSED;
+
+	return 0;
+}
+
 static int mmp_pdma_config(struct dma_chan *dchan,
 			   struct dma_slave_config *cfg)
 {
@@ -939,6 +962,8 @@ static int mmp_pdma_terminate_all(struct dma_chan *dchan)
 	mmp_pdma_free_desc_list(chan, &chan->chain_running);
 	spin_unlock_irqrestore(&chan->desc_lock, flags);
 	chan->idle = true;
+
+	mmp_pdma_qos_put(chan);
 
 	return 0;
 }
@@ -1187,6 +1212,9 @@ static int mmp_pdma_chan_init(struct mmp_pdma_device *pdev, int idx, int irq)
 	INIT_LIST_HEAD(&chan->chain_pending);
 	INIT_LIST_HEAD(&chan->chain_running);
 
+	chan->qos_count = 0;
+	chan->user_do_qos = 1;
+
 	/* register virt channel to dma engine */
 	list_add_tail(&chan->chan.device_node, &pdev->device.channels);
 
@@ -1226,12 +1254,29 @@ static struct dma_chan *mmp_pdma_dma_xlate(struct of_phandle_args *dma_spec,
 {
 	struct mmp_pdma_device *d = ofdma->of_dma_data;
 	struct dma_chan *chan;
+#ifdef CONFIG_PM
+	struct mmp_pdma_chan *c;
+#endif
 
 	chan = dma_get_any_slave_channel(&d->device);
 	if (!chan)
 		return NULL;
 
 	to_mmp_pdma_chan(chan)->drcmr = dma_spec->args[0];
+#ifdef CONFIG_PM
+	if (unlikely(dma_spec->args_count != 2))
+		dev_err(d->dev, "#dma-cells should be 2!\n");
+
+	c = to_mmp_pdma_chan(chan);
+	c->user_do_qos = dma_spec->args[1] ? 1 : 0;
+
+	if (c->user_do_qos)
+		dev_dbg(d->dev, "channel %d: user does qos itself\n",
+			 c->chan.chan_id);
+	else
+		dev_dbg(d->dev, "channel %d: pdma does qos\n",
+			 c->chan.chan_id);
+#endif
 
 	return chan;
 }
@@ -1350,6 +1395,14 @@ Date:   Fri Oct 6 16:38:35 2023 -0500
 	pdev->max_burst_size = max_burst_size;
 	dev_dbg(pdev->dev, "set max burst size to %d\n", max_burst_size);
 
+#ifdef CONFIG_PM
+	pm_runtime_enable(&op->dev);
+	/*
+	 * We can't ensure the pm operations are always in non-atomic context.
+	 * Actually it depends on the drivers' behavior. So mark it as irq safe.
+	 */
+	pm_runtime_irq_safe(&op->dev);
+#endif
 	for (i = 0; i < dma_channels; i++) {
 		if (platform_get_irq_optional(op, i) > 0)
 			irq_num++;
@@ -1391,6 +1444,7 @@ Date:   Fri Oct 6 16:38:35 2023 -0500
 	pdev->device.device_prep_dma_cyclic = mmp_pdma_prep_dma_cyclic;
 	pdev->device.device_issue_pending = mmp_pdma_issue_pending;
 	pdev->device.device_config = mmp_pdma_config;
+	pdev->device.device_pause = mmp_pdma_pause_chan;
 	pdev->device.device_terminate_all = mmp_pdma_terminate_all;
 	pdev->device.copy_align = DMAENGINE_ALIGN_8_BYTES;
 	pdev->device.src_addr_widths = widths;
@@ -1433,6 +1487,47 @@ Date:   Fri Oct 6 16:38:35 2023 -0500
 	platform_set_drvdata(op, pdev);
 	dev_info(pdev->device.dev, "initialized %d channels\n", dma_channels);
 	return 0;
+}
+
+/*
+ * Per-channel qos get/put function. This function ensures that pm_
+ * runtime_get/put are not called multi times for one channel.
+ * This guarantees pm_runtime_get/put always match for the entire device.
+ */
+static void mmp_pdma_qos_get(struct mmp_pdma_chan *chan)
+{
+	unsigned long flags;
+
+	if (chan->user_do_qos)
+		return;
+
+	spin_lock_irqsave(&chan->desc_lock, flags);
+	if (chan->qos_count == 0) {
+		chan->qos_count = 1;
+		/*
+		 * Safe in spin_lock because it's marked as irq safe.
+		 * Similar case for mmp_pdma_qos_put().
+		 */
+		pm_runtime_get_sync(chan->dev);
+	}
+
+	spin_unlock_irqrestore(&chan->desc_lock, flags);
+}
+
+static void mmp_pdma_qos_put(struct mmp_pdma_chan *chan)
+{
+	unsigned long flags;
+
+	if (chan->user_do_qos)
+		return;
+
+	spin_lock_irqsave(&chan->desc_lock, flags);
+	if (chan->qos_count == 1) {
+		chan->qos_count = 0;
+		pm_runtime_put_autosuspend(chan->dev);
+	}
+
+	spin_unlock_irqrestore(&chan->desc_lock, flags);
 }
 
 static const struct platform_device_id mmp_pdma_id_table[] = {
