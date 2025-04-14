@@ -1600,7 +1600,18 @@ static struct platform_driver mmp_pdma_driver = {
 	.remove		= mmp_pdma_remove,
 };
 
-module_platform_driver(mmp_pdma_driver);
+static int __init mmp_pdma_init(void)
+{
+	return platform_driver_register(&mmp_pdma_driver);
+}
+
+static void __exit mmp_pdma_exit(void)
+{
+	platform_driver_unregister(&mmp_pdma_driver);
+}
+
+subsys_initcall(mmp_pdma_init);
+module_exit(mmp_pdma_exit);
 
 MODULE_DESCRIPTION("MARVELL MMP Peripheral DMA Driver");
 MODULE_AUTHOR("Marvell International Ltd.");
