@@ -21,6 +21,7 @@
 #include <linux/of_dma.h>
 #include <linux/of.h>
 
+#include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <linux/pm_qos.h>
 
@@ -247,9 +248,18 @@ static u64 combine_u64_64_bits(u32 lower, u32 upper)
 static void enable_chan(struct mmp_pdma_phy *phy, u32 dcsr_enable_chan)
 {
 	u32 reg, dalgn;
+	unsigned long flags;
+	struct mmp_pdma_device *pdev;
+
+	if (phy == NULL)
+		return;
 
 	if (!phy->vchan)
 		return;
+
+	pdev = to_mmp_pdma_dev(phy->vchan->chan.device);
+
+	spin_lock_irqsave(&pdev->phy_lock, flags);
 
 	reg = DRCMR(phy->vchan->drcmr);
 	writel(DRCMR_MAPVLD | phy->idx, phy->base + reg);
@@ -263,17 +273,34 @@ static void enable_chan(struct mmp_pdma_phy *phy, u32 dcsr_enable_chan)
 
 	reg = (phy->idx << 2) + DCSR;
 	writel(readl(phy->base + reg) | dcsr_enable_chan, phy->base + reg);
+
+	spin_unlock_irqrestore(&pdev->phy_lock, flags);
 }
 
 static void disable_chan(struct mmp_pdma_phy *phy, u32 dcsr_enable_chan)
 {
 	u32 reg;
+	u32 dcsr, cnt = 1000;
 
 	if (!phy)
 		return;
 
 	reg = (phy->idx << 2) + DCSR;
 	writel(readl(phy->base + reg) & ~dcsr_enable_chan, phy->base + reg);
+
+	/* ensure dma is stopped. */
+	dcsr = readl(phy->base + reg);
+	/* About DCSR_STOPSTATE:
+	 * This bit indicates the current state of the channel:
+	 *   0: Channel is running
+	 *   1: Channel is in uninitialized or stopped state
+	 */
+	while (!(dcsr & DCSR_STOPSTATE) && --cnt) {
+		udelay(10);
+		dcsr = readl(phy->base + reg);
+	}
+
+	WARN_ON(!cnt);
 }
 
 static int clear_chan_irq(struct mmp_pdma_phy *phy)
