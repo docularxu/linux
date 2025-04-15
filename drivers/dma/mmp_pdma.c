@@ -1128,8 +1128,7 @@ static const struct mmp_pdma_config spacemit_k1_pdma_v1_config = {
 	.read64_desc_adr = read64_desc_adr_64_bits,
 	.combine_u64 = combine_u64_64_bits,
 	/* use long descriptor mode: set DCSR_LPAEEN bit */
-	.dcsr_enable_chan = (DCSR_RUN | DCSR_LPAEEN |
-			     DCSR_EORIRQEN | DCSR_EORSTOPEN),
+	.dcsr_enable_chan = (DCSR_RUN | DCSR_LPAEEN),
 	.dma_mask = DMA_BIT_MASK(64),	/* support 64 bits address */
 };
 
