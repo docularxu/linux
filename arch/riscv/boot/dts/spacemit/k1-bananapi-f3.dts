@@ -71,3 +71,27 @@
 &pdma0 {
 	status = "okay";
 };
+
+&i2c2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c2_0_cfg>;
+	spacemit,i2c-fast-mode;
+	status = "okay";
+
+	eeprom@50{
+		compatible = "atmel,24c02";
+		reg = <0x50>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		status = "disabled";
+
+		mac_address0: mac_address0@0 {
+			reg = <0x0 6>;
+		};
+
+		mac_address1: mac_address1@6 {
+			reg = <0x6 6>;
+		};
+	};
+};

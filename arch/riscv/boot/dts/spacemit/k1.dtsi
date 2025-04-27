@@ -751,5 +751,42 @@
 			resets = <&syscon_apbc RESET_PWM19>;
 			status = "disabled";
 		};
+
+		i2c2: i2c@d4012000 {
+			compatible = "spacemit,k1x-i2c";
+			spacemit,adapter-id = <2>;
+			reg = <0x0 0xd4012000 0x0 0x38>;
+			/* usually i2c client has only 1 reg field */
+			#address-cells = <1>;
+			#size-cells = <0>;
+			interrupts = <38>;
+			clocks = <&syscon_apbc CLK_TWSI2>;
+			resets = <&syscon_apbc RESET_TWSI2>;
+			/*  #define DMA_I2C2_TX 15
+			    #define DMA_I2C2_RX 16
+			TODO: define the macros for DMA channel
+			 Refer to Section 10.4.3.6:
+			 https://developer.spacemit.com/documentation?token=LCrKwWDasiJuROkVNusc2pWTnEb#10.4-dma
+			 */
+			dmas = <&pdma0 16 1
+				&pdma0 15 1>;
+			dma-names = "rx", "tx";
+			/* spacemit,dma-disable; */
+			/* spacemit,i2c-fast-mode; */
+			/* spacemit,i2c-high-mode; */
+			spacemit,i2c-master-code = /bits/ 8 <0x0e>;
+			spacemit,i2c-clk-rate = <32000000>;
+			spacemit,i2c-lcr = <0x82c469f>;
+			spacemit,i2c-wcr = <0x142a>;
+			/* apb clock: 26MHz or 52MHz */
+			spacemit,apb_clock = <52000000>;
+			/* comment out by Guodong Xu
+			power-domains = <&power K1X_PMU_BUS_PWR_DOMAIN>;
+			cpuidle,pm-runtime,sleep;
+			interconnects = <&dram_range4>;
+			interconnect-names = "dma-mem";
+			 */
+			status = "disabled";
+		};
 	};
 };

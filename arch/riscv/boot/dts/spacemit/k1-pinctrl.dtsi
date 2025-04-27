@@ -20,6 +20,15 @@
 			drive-strength = <32>;
 		};
 	};
+	i2c2_0_cfg: i2c2-0-cfg {
+		i2c2-0-pins {
+			pinmux = <K1_PADCONF(84, 4)>,
+				 <K1_PADCONF(85, 4)>;
+
+			bias-pull-up = <0>;
+			drive-strength = <11>;
+		};
+	};
 	pwm0_0_cfg: pwm0-0-cfg {
 		pwm0-0-pins {
 			pinmux = <K1_PADCONF(104, 5)>;
