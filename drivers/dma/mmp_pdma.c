@@ -1142,8 +1142,7 @@ static const struct mmp_pdma_config spacemit_k1_pdma_v1_config = {
 	.split_dma_addr_to_components = split_dma_addr_to_components_64_bits,
 	.combine_u64 = combine_u64_64_bits,
 	.read_iomem_combine_u64 = read_iomem_combine_u64_64_bits,
-	.dcsr_channel_run_bits = (DCSR_RUN | DCSR_LPAEEN |
-				  DCSR_EORIRQEN | DCSR_EORSTOPEN),
+	.dcsr_channel_run_bits = (DCSR_RUN | DCSR_LPAEEN),
 	.dma_mask = DMA_BIT_MASK(64),	/* support 64 bits address */
 };
 
