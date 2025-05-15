@@ -112,8 +112,14 @@ static void spacemit_sdhci_set_uhs_signaling(struct sdhci_host *host, unsigned i
 
 	sdhci_set_uhs_signaling(host, timing);
 
-	if (!(host->mmc->caps2 & MMC_CAP2_NO_SDIO))
-		spacemit_sdhci_setbits(host, SDHCI_CTRL_VDD_180, SDHCI_HOST_CONTROL2);
+	if (!(host->mmc->caps2 & MMC_CAP2_NO_SDIO)) {
+		u32 reg = SDHCI_HOST_CONTROL2;
+		u16 val = sdhci_readw(host, reg);
+
+		val |= SDHCI_CTRL_VDD_180;
+
+		sdhci_writew(host, val, reg);
+	}
 }
 
 static void spacemit_sdhci_set_clock(struct sdhci_host *host, unsigned int clock)
