@@ -546,7 +546,7 @@ static void pump_transfers(struct work_struct *work)
 	}
 
 	top_ctrl = k1x_configure_topctrl(drv_data, bits);
-		dev_dbg(&message->spi->dev, "%u Hz, %s\n",
+	dev_err(&message->spi->dev, "%u Hz, chip->enable_dma or pio?:%s\n",
 			drv_data->controller->max_speed_hz,
 			chip->enable_dma ? "DMA" : "PIO");
 	top_ctrl |= chip->top_ctrl;
@@ -595,7 +595,7 @@ static void pump_transfers(struct work_struct *work)
 	if (drv_data->dma_mapped) {
 		/* Ensure we have the correct interrupt handler */
 		drv_data->transfer_handler = k1x_spi_dma_transfer;
-
+		dev_err(&message->spi->dev, "to call: k1x_spi_dma_prepare and _dma_start.\n");
 		k1x_spi_dma_prepare(drv_data, dma_burst);
 
 		/* Clear status and start DMA engine */
@@ -607,6 +607,7 @@ static void pump_transfers(struct work_struct *work)
 	} else {
 		/* Ensure we have the correct interrupt handler	*/
 		drv_data->transfer_handler = interrupt_transfer;
+		dev_err(&message->spi->dev, "to call: k1x_spi_read anad _write, not dma.\n");
 
 		fifo_ctrl = fifo_ctrl | chip->fifo_ctrl | chip->threshold;
 		int_en = k1x_spi_read(drv_data, INT_EN) | drv_data->int_cr;
@@ -919,7 +920,7 @@ static int k1x_spi_probe(struct platform_device *pdev)
 	if (controller_info->enable_dma) {
 		status = k1x_spi_dma_setup(drv_data);
 		if (status) {
-			dev_dbg(dev, "no DMA channels available, using PIO\n");
+			dev_err(dev, "no DMA channels available, using PIO\n");
 			controller_info->enable_dma = false;
 		}
 	}
