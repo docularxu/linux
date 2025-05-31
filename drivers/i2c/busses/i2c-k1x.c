@@ -1442,6 +1442,8 @@ static int spacemit_i2c_prepare_dma(struct spacemit_i2c_dev *spacemit_i2c)
 		return ret;
 	}
 	dev_err(spacemit_i2c->dev, "Succeed to request rx dma channel\n");
+	dev_err(spacemit_i2c->dev, "rx dma enable, channel:%d\n",
+		 spacemit_i2c->rx_dma->chan_id);
 
 	spacemit_i2c->tx_dma = dma_request_slave_channel(spacemit_i2c->dev, "tx");
 	if (IS_ERR_OR_NULL(spacemit_i2c->tx_dma)) {
@@ -1450,6 +1452,8 @@ static int spacemit_i2c_prepare_dma(struct spacemit_i2c_dev *spacemit_i2c)
 		goto err_rxch;
 	}
 	dev_err(spacemit_i2c->dev, "Succeed to request tx dma channel\n");
+	dev_err(spacemit_i2c->dev, "tx dma enable, channel:%d\n",
+		 spacemit_i2c->tx_dma->chan_id);
 
 	rx_cfg->direction = DMA_DEV_TO_MEM;
 	rx_cfg->src_addr = spacemit_i2c->resrc.start + REG_RFIFO;
