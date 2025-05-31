@@ -422,6 +422,8 @@ static void start_pending_queue(struct mmp_pdma_chan *chan)
 	 * Program the descriptor's address into the DMA controller,
 	 * then start the DMA transaction
 	 */
+	dev_err(chan->dev, "%s() dma channel: chan->chan.chan_id %d; phy->idx %d\n",
+		__func__, chan->chan.chan_id, chan->phy->idx);
 	pdev->config->set_phy_ddadr(chan->phy, desc->async_tx.phys);
 	enable_chan(chan->phy, pdev->config->dcsr_channel_run_bits);
 	chan->idle = false;
@@ -436,6 +438,7 @@ static dma_cookie_t mmp_pdma_tx_submit(struct dma_async_tx_descriptor *tx)
 	struct mmp_pdma_desc_sw *child;
 	unsigned long flags;
 	dma_cookie_t cookie = -EBUSY;
+	dev_err(chan->dev, "Enter %s()\n", __func__);
 
 	spin_lock_irqsave(&chan->desc_lock, flags);
 
@@ -541,6 +544,7 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	size_t copy = 0;
+	dev_err(chan->dev, "Enter %s()\n", __func__);
 
 	if (!dchan)
 		return NULL;
@@ -633,6 +637,7 @@ mmp_pdma_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
 	struct scatterlist *sg;
 	dma_addr_t addr;
 	int i;
+	dev_err(chan->dev, "Enter %s()\n", __func__);
 
 	if ((sgl == NULL) || (sg_len == 0))
 		return NULL;
@@ -735,6 +740,7 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 
 	chan = to_mmp_pdma_chan(dchan);
 	mmp_pdma_config_write(dchan, &chan->slave_config, direction);
+	dev_err(chan->dev, "Enter %s()\n", __func__);
 
 	switch (direction) {
 	case DMA_MEM_TO_DEV:
@@ -987,6 +993,7 @@ static void mmp_pdma_issue_pending(struct dma_chan *dchan)
 {
 	struct mmp_pdma_chan *chan = to_mmp_pdma_chan(dchan);
 	unsigned long flags;
+	dev_err(chan->dev, "Enter %s()\n", __func__);
 
 	spin_lock_irqsave(&chan->desc_lock, flags);
 	start_pending_queue(chan);
@@ -1005,6 +1012,7 @@ static void dma_do_tasklet(struct tasklet_struct *t)
 	LIST_HEAD(chain_cleanup);
 	unsigned long flags;
 	struct dmaengine_desc_callback cb;
+	dev_err(chan->dev, "Enter %s()\n", __func__);
 
 	if (chan->cyclic_first) {
 		spin_lock_irqsave(&chan->desc_lock, flags);
@@ -1163,6 +1171,8 @@ static struct dma_chan *mmp_pdma_dma_xlate(struct of_phandle_args *dma_spec,
 	if (!chan)
 		return NULL;
 
+	dev_err(d->dev, "Enter %s()\n", __func__);
+
 	to_mmp_pdma_chan(chan)->drcmr = dma_spec->args[0];
 
 	return chan;
@@ -1274,6 +1284,11 @@ static int mmp_pdma_probe(struct platform_device *op)
 -	else
 -		dma_set_mask(pdev->dev, DMA_BIT_MASK(64));
 	 */
+	dev_err(pdev->device.dev, "DMA_BIT_MASK(64)=0x%llx\n",
+		 DMA_BIT_MASK(64));
+	dev_err(pdev->device.dev, "pdev->dev->coherent_dma_mask=0x%llx\n",
+		 pdev->dev->coherent_dma_mask);
+
 	if (pdev->config->dma_mask)
 		dma_set_mask(pdev->dev, pdev->config->dma_mask);
 	else if (pdev->dev->coherent_dma_mask)
