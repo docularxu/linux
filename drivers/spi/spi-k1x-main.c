@@ -818,12 +818,13 @@ static int k1x_spi_probe(struct platform_device *pdev)
 		if (!controller_info)
 			return -ENOMEM;
 		controller_info->num_chipselect = 1;
-		/* TODO: NO DMA on FPGA yet */
-		if (of_get_property(np, "k1x,ssp-disable-dma", NULL))
-			controller_info->enable_dma = 0;
-		else
-			controller_info->enable_dma = 1;
 	}
+
+	/* TODO: NO DMA on FPGA yet */
+	if (of_get_property(np, "k1x,ssp-disable-dma", NULL))
+		controller_info->enable_dma = 0;
+	else
+		controller_info->enable_dma = 1;
 
 	host = spi_alloc_host(dev, sizeof(struct spi_driver_data));
 	if (!host) {
