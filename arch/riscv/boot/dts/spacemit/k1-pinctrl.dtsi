@@ -57,4 +57,41 @@
 			power-source = <3300>;           /* external power supply */
 		};
 	};
+
+	/* TODO qspi, refer to v6.13 vendor tree */
+	/*
+	 * 	K1X_PADCONF(QSPI_DAT3, MUX_MODE0, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	 qspi_d3
+	 * 	K1X_PADCONF(QSPI_DAT2, MUX_MODE0, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	 qspi_d2
+	 * 	K1X_PADCONF(QSPI_DAT1, MUX_MODE0, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	 qspi_d1
+	 *	K1X_PADCONF(QSPI_DAT0, MUX_MODE0, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	 qspi_d0
+	 * 	K1X_PADCONF(QSPI_CLK,  MUX_MODE0, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	 qspi_clk
+	 * 	K1X_PADCONF(QSPI_CSI,  MUX_MODE0, (EDGE_NONE | PULL_UP  | PAD_3V_DS4))	 qspi_cs
+	 * PINCTRL_PIN(98,  "GPIO_98/QSPI_DAT3"),
+	 * PINCTRL_PIN(99,  "GPIO_99/QSPI_DAT2"),
+	 * PINCTRL_PIN(100, "GPIO_100/QSPI_DAT1"),
+	 * PINCTRL_PIN(101, "GPIO_101/QSPI_DAT0"),
+	 * PINCTRL_PIN(102, "GPIO_102/QSPI_CLK"),
+	 * PINCTRL_PIN(103, "GPIO_103/QSPI_CS1"),
+	 */
+	qspi_cfg: qspi-cfg {
+		/* pull disabled: d3, d2, d1, d0, clk */
+		qspi-no-pull-pins {
+			pinmux = <K1_PADCONF(98, 0)>,    /* qspi_d3 */
+				 <K1_PADCONF(99, 0)>,    /* qspi_d2 */
+				 <K1_PADCONF(100, 0)>,   /* qspi_d1 */
+				 <K1_PADCONF(101, 0)>,   /* qspi_d0 */
+				 <K1_PADCONF(102, 0)>;   /* qspi_clk */
+
+			bias-disable;                    /* pull_dis */
+			drive-strength = <19>;           /* 3V_DS4 */
+			power-source = <3300>;           /* external power supply */
+		};
+		/* pull up: cs1 */
+		qspi-cs1-pins {
+			pinmux = <K1_PADCONF(103, 0)>;   /* qspi_cs1 */
+			bias-pull-up = <0>;              /* normal pull-up */
+			drive-strength = <19>;           /* 3V_DS4 */
+			power-source = <3300>;           /* external power supply */
+		};
+	};
 };
