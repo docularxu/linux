@@ -270,6 +270,8 @@ void k1x_spi_slave_sw_timeout_callback(struct spi_driver_data *drv_data)
 int k1x_spi_dma_prepare(struct spi_driver_data *drv_data, u32 dma_burst)
 {
 	struct dma_async_tx_descriptor *tx_desc, *rx_desc;
+	dev_err(&drv_data->pdev->dev,
+		"Enter %s()\n", __func__);
 
 	tx_desc = k1x_spi_dma_prepare_one(drv_data, DMA_MEM_TO_DEV);
 	if (!tx_desc) {
@@ -296,6 +298,8 @@ int k1x_spi_dma_prepare(struct spi_driver_data *drv_data, u32 dma_burst)
 
 void k1x_spi_dma_start(struct spi_driver_data *drv_data)
 {
+	dev_err(&drv_data->pdev->dev,
+		"Enter %s()\n", __func__);
 	dma_async_issue_pending(drv_data->rx_chan);
 	dma_async_issue_pending(drv_data->tx_chan);
 
@@ -319,6 +323,8 @@ int k1x_spi_dma_setup(struct spi_driver_data *drv_data)
 				pdata->dma_filter, pdata->tx_param, dev, "tx");
 	if (!drv_data->tx_chan)
 		return -ENODEV;
+	dev_err(dev, "spi-k1x: tx dma enable, channel:%d\n",
+		drv_data->tx_chan->chan_id);
 
 	drv_data->rx_chan = dma_request_slave_channel_compat(mask,
 				pdata->dma_filter, pdata->rx_param, dev, "rx");
@@ -327,6 +333,8 @@ int k1x_spi_dma_setup(struct spi_driver_data *drv_data)
 		drv_data->tx_chan = NULL;
 		return -ENODEV;
 	}
+	dev_err(dev, "spi-k1x: rx dma enable, channel:%d\n",
+		drv_data->rx_chan->chan_id);
 
 	return 0;
 }
