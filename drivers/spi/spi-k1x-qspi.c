@@ -700,7 +700,7 @@ static void k1x_qspi_prepare_dma(struct k1x_qspi *qspi)
 			qspi->rx_dma = NULL;
 			qspi->rx_dma_enable = 0;
 		} else {
-			dev_dbg(dev, "rx dma enable, channel:%d\n", qspi->rx_dma->chan_id);
+			dev_err(dev, "rx dma enable, channel:%d\n", qspi->rx_dma->chan_id);
 		}
 	}
 
@@ -719,7 +719,7 @@ static void k1x_qspi_prepare_dma(struct k1x_qspi *qspi)
 				qspi->tx_dma = NULL;
 				qspi->tx_dma_enable = 0;
 			} else {
-				dev_dbg(dev, "tx dma enable, channel:%d\n", qspi->tx_dma->chan_id);
+				dev_err(dev, "tx dma enable, channel:%d\n", qspi->tx_dma->chan_id);
 			}
 		} else {
 			qspi->tx_dma_enable = 0;
@@ -744,6 +744,7 @@ static int k1x_qspi_tx_dma_exec(struct k1x_qspi *qspi,
 	enum dma_transfer_direction dma_dir;
 	dma_cookie_t cookie;
 	int err = 0;
+	dev_err(qspi->dev, "Enter %s()\n", __func__);
 
 	if (!virt_addr_valid(op->data.buf.in) ||
 	    spi_controller_dma_map_mem_op_data(qspi->ctrl, op, &qspi->sgt)) {
@@ -826,7 +827,7 @@ static int k1x_qspi_rx_dma_sg(struct k1x_qspi *qspi, struct sg_table rx_sg,
 	for_each_sg(rx_sg.sgl, sg, rx_sg.nents, i) {
 		dma_dst = sg_dma_address(sg);
 		len = sg_dma_len(sg);
-		dev_dbg(qspi->dev, "rx dma, dst:0x%pad, src:0x%pad, len:%d\n",
+		dev_err(qspi->dev, "rx dma, dst:0x%pad, src:0x%pad, len:%d\n",
 			&dma_dst, &dma_src, len);
 		ret = k1x_qspi_rx_dma_exec(qspi, dma_dst, dma_src, len);
 		if (ret)
@@ -846,7 +847,7 @@ static int k1x_qspi_ahb_read(struct k1x_qspi *qspi,
 	struct sg_table sgt;
 
 	/* Read out the data directly from the AHB buffer. */
-	dev_dbg(qspi->dev, "ahb read %d bytes from address:0x%llx\n",
+	dev_err(qspi->dev, "ahb read %d bytes from address:0x%llx\n",
 				len, (qspi->memmap_base + op->addr.val));
 	if (from + len > qspi->memmap_size)
 		return -ENOTSUPP;
