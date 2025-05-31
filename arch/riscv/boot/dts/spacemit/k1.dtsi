@@ -901,6 +901,8 @@
 			dmas = <&pdma0 16 1
 				&pdma0 15 1>;
 			dma-names = "rx", "tx";
+			interconnects = <&mbus4>;
+			interconnect-names = "dma-mem";
 			/* spacemit,dma-disable; */
 			/* spacemit,i2c-fast-mode; */
 			/* spacemit,i2c-high-mode; */
@@ -940,6 +942,8 @@
 			dmas = <&pdma0 20 1
 				&pdma0 19 1>;
 			dma-names = "rx", "tx";
+			interconnects = <&mbus4>;
+			interconnect-names = "dma-mem";
 			/* comment out by Guodong Xu
 			   power-domains = <&power K1X_PMU_BUS_PWR_DOMAIN>;
 			   cpuidle,pm-runtime,sleep;
@@ -987,6 +991,8 @@
 			k1x,qspi-rx-dma = <1>;
 			dmas = <&pdma0 45 1>;
 			dma-names = "tx-dma";
+			interconnects = <&mbus4>;
+			interconnect-names = "dma-mem";
 			status = "disabled";
 		};
 	};
