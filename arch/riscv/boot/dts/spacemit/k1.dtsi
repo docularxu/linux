@@ -348,13 +348,21 @@
 		dma-noncoherent;
 		ranges;
 
-		dma-ranges = <0x0 0x00000000 0x0 0x00000000 0x0 0x80000000>,
-			     <0x1 0x00000000 0x1 0x80000000 0x3 0x00000000>;
-
 		mbus0: dram-controller@0 {
 			compatible = "spacemit,k1-mbus";
 			reg = <0x0 0x00000000 0x0 0x80000000>;
 			dma-ranges = <0x0 0x00000000 0x0 0x00000000 0x0 0x80000000>;
+			#address-cells = <2>;
+			#size-cells = <2>;
+			#interconnect-cells = <0>;
+		};
+
+		mbus4: dram-controller@4 {
+			compatible = "spacemit,k1-mbus";
+			/* todo: why reg is set to 'required' in the spacemit,k1-mbus.yaml? */
+			reg = <0x0 0x00000000 0x0 0x80000000>;
+			dma-ranges = <0x0 0x00000000 0x0 0x00000000 0x0 0x80000000>,
+				     <0x1 0x00000000 0x1 0x80000000 0x3 0x00000000>;
 			#address-cells = <2>;
 			#size-cells = <2>;
 			#interconnect-cells = <0>;
@@ -447,6 +455,8 @@
 			resets = <&syscon_apmu RESET_DMA>;
 			#dma-cells= <2>;
 			#dma-channels = <16>;
+			interconnects = <&mbus4>;
+			interconnect-names = "dma-mem";
 			status = "disabled";
 		};
 
