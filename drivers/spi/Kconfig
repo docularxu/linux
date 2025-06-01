@@ -560,7 +560,7 @@ config SPI_KSPI2
 
 config SPI_K1
 	tristate "K1 SPI Controller"
-	depends on ARCH_SPACEMIT_K1
+	depends on ARCH_SPACEMIT
 	help
 	  Enable support for the Spacemit K1 SPI controller.
 
