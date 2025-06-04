@@ -871,9 +871,18 @@ static int k1x_spi_probe(struct platform_device *pdev)
 		host->bus_num = bus_num;
 	drv_data->ssdr_physical = iores->start + DATAR;
 
-	drv_data->clk = devm_clk_get(dev, NULL);
+	/* todo: handling "bus" clk clk_bus */
+	struct clk *clk_bus;
+	clk_bus = devm_clk_get_enabled(dev, "bus");
+	if (IS_ERR(clk_bus)) {
+		dev_err(&pdev->dev, "Failed to get bus clk\n");
+		status = PTR_ERR(clk_bus);
+		goto out_error_clk_check;
+	}
+
+	drv_data->clk = devm_clk_get(dev, "core");
 	if (IS_ERR_OR_NULL(drv_data->clk)) {
-		dev_err(&pdev->dev, "cannot get clk\n");
+		dev_err(&pdev->dev, "Failed to get core clk\n");
 		status = -ENODEV;
 		goto out_error_clk_check;
 	}
