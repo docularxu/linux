@@ -611,12 +611,16 @@ static void pump_transfers(struct work_struct *work)
 
 		fifo_ctrl = fifo_ctrl | chip->fifo_ctrl | chip->threshold;
 		int_en = k1x_spi_read(drv_data, INT_EN) | drv_data->int_cr;
+		dev_err(&message->spi->dev, "to call: after k1x_spi_read(INT_EN), not dma.\n");
 		k1x_spi_write(drv_data, STATUS, drv_data->clear_sr);
+		dev_err(&message->spi->dev, "to call: after k1x_spi_write(STATUS), not dma.\n");
 	}
 
 	k1x_spi_write(drv_data, TO, chip->timeout);
+	dev_err(&message->spi->dev, "to call: after k1x_spi_write(TO)\n");
 
 	cs_assert(drv_data);
+	dev_err(&message->spi->dev, "to call: after cs_assert(drv_data)\n");
 
 	/*
 	 * TODO: refine these logic
@@ -641,13 +645,18 @@ static void pump_transfers(struct work_struct *work)
 	k1x_spi_write(drv_data, FIFO_CTRL, fifo_ctrl);
 	k1x_spi_write(drv_data, INT_EN, int_en);
 	top_ctrl |= TOP_SSE;
-#ifdef CONFIG_K1_SSP_DEBUG
+	dev_err(&message->spi->dev, "to call: after k1x_spi_write(): TOP_CTRL, FIFO_CTRL, INT_EN\n");
+/*
+ * #ifdef CONFIG_K1_SSP_DEBUG
+ */
+#if 1
 	dev_err(&message->spi->dev, "spi top = 0x%x\n", top_ctrl);
 	dev_err(&message->spi->dev, "fifo = 0x%x\n", k1x_spi_read(drv_data, FIFO_CTRL));
 	dev_err(&message->spi->dev, "int_en = 0x%x\n", k1x_spi_read(drv_data, INT_EN));
 	dev_err(&message->spi->dev, "to = 0x%x\n", k1x_spi_read(drv_data, TO));
 #endif
 	k1x_spi_write(drv_data, TOP_CTRL, top_ctrl);
+	dev_err(&message->spi->dev, "to call: after k1x_spi_write(): TOP_CTRL. RETURN\n");
 }
 
 static int k1x_spi_transfer_one_message(struct spi_controller *host,
@@ -676,6 +685,7 @@ static int k1x_spi_transfer_one_message(struct spi_controller *host,
 	reinit_completion(&drv_data->cur_msg_completion);
 	/* Mark as busy and launch transfers */
 	queue_work(system_wq, &drv_data->pump_transfers);
+	/* guodong TODO: debug: hang in wait_for_completion */
 	wait_for_completion(&drv_data->cur_msg_completion);
 
 	return 0;
