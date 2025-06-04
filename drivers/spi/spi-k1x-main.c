@@ -879,6 +879,9 @@ static int k1x_spi_probe(struct platform_device *pdev)
 	}
 
 	drv_data->reset = devm_reset_control_get_optional(dev, NULL);
+	/* BUG: to fix: if reset control is 'optional', why report an error
+	 *      when it returns NULL? IS_ERR_OR_NULL()?
+	 */
 	if (IS_ERR_OR_NULL(drv_data->reset)) {
 		dev_err(&pdev->dev, "Failed to get spi's reset\n");
 		status = -ENODEV;
