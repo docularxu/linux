@@ -1,0 +1,20 @@
+Topic 1:
+Q: Regarding the QSPI part, I noticed there’s only a TX DMA; the RX DMA goes
+through AHB with a memory copy. Could you briefly explain this design in
+a few sentences? It seems that in PDMA, there is a QSPI RX channel. Why not
+use it?
+
+[ 277.575750] k1x-qspi d420c000.spi: ahb read 4096 bytes from address:0xb8003000
+[ 277.582959] k1x-qspi d420c000.spi: rx dma, dst:0x000000007b122000, src:0x00000000b8003000, len:4096
+
+A: Yan Haodong (SpacemiT) responded:
+
+Both the QSPI TX and RX DMA channels are requested within the QSPI driver.
+For the TX DMA channel, due to hardware design, the DMA driver needs to detect
+the QSPI TX handshake signal and assign a specific reserved-channel. The
+transfer direction is memory-to-device (mem2dev).
+
+For QSPI RX, it uses an XIP mechanism, so the DMA sees both the source and
+destination as memory. It can therefore directly request a memcpy-capable
+channel without requiring a hardware handshake. Hence, there’s no need to
+reserve a fixed channel in PDMA when requesting the RX channel.
