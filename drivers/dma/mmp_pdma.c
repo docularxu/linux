@@ -1337,6 +1337,11 @@ static int mmp_pdma_probe(struct platform_device *op)
 	pdev->device.residue_granularity = DMA_RESIDUE_GRANULARITY_DESCRIPTOR;
 
 	/* Set DMA mask based on config, or OF/platform */
+dev_err(pdev->device.dev, "xgd: pdma: pdev->config->dma_mask=0x%llx\n",
+         (unsigned long long)pdev->config->dma_mask);
+dev_err(pdev->device.dev, "xgd: pdma: dev->coherent_dma_mask=0x%llx\n",
+         (unsigned long long)pdev->dev->coherent_dma_mask);
+
 	if (pdev->config->dma_mask)
 		dma_set_mask(pdev->dev, pdev->config->dma_mask);
 	else if (pdev->dev->coherent_dma_mask)
