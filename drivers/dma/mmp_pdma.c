@@ -254,6 +254,7 @@ static void enable_chan(struct mmp_pdma_phy *phy)
 {
 	u32 reg, dalgn;
 	struct mmp_pdma_device *pdev;
+	pr_err("xgd: pdma: entered %s\n", __func__);
 
 	if (!phy->vchan)
 		return;
@@ -278,9 +279,14 @@ static void enable_chan(struct mmp_pdma_phy *phy)
 static void disable_chan(struct mmp_pdma_phy *phy)
 {
 	u32 reg, dcsr;
+	pr_err("xgd: pdma: entered %s\n", __func__);
 
 	if (!phy)
 		return;
+	if (phy->vchan)
+		dev_err(phy->vchan->dev, "disable_chan() idx=%d\n", phy->idx);
+	else
+		pr_err("disable_chan() idx=%d no vchan\n", phy->idx);
 
 	reg = (phy->idx << 2) + DCSR;
 	dcsr = readl(phy->base + reg);
@@ -557,6 +563,22 @@ static void mmp_pdma_free_chan_resources(struct dma_chan *dchan)
 	return;
 }
 
+static const char *pdma_dir_str(enum dma_transfer_direction dir)
+{
+    switch (dir) {
+    case DMA_MEM_TO_MEM:
+        return "MEM_TO_MEM";
+    case DMA_MEM_TO_DEV:
+        return "MEM_TO_DEV";
+    case DMA_DEV_TO_MEM:
+        return "DEV_TO_MEM";
+    case DMA_DEV_TO_DEV:
+        return "DEV_TO_DEV";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 static struct dma_async_tx_descriptor *
 mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 		     dma_addr_t dma_dst, dma_addr_t dma_src,
@@ -566,6 +588,12 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	size_t copy = 0;
+	pr_err("xgd: pdma: entered %s\n", __func__);
+	pr_err("xgd: pdma: chan_id=%d src=0x%llx dst=0x%llx len=%zu\n",
+           dchan->chan_id,
+           (unsigned long long)dma_src,
+           (unsigned long long)dma_dst,
+           len);
 
 	if (!dchan)
 		return NULL;
@@ -581,6 +609,7 @@ mmp_pdma_prep_memcpy(struct dma_chan *dchan,
 		chan->dcmd = DCMD_INCTRGADDR | DCMD_INCSRCADDR;
 		chan->dcmd |= DCMD_BURST32;
 	}
+pr_err("xgd: pdma: dir=%s\n", pdma_dir_str(chan->dir));
 
 	do {
 		/* Allocate the link descriptor from DMA pool */
@@ -655,6 +684,13 @@ mmp_pdma_prep_slave_sg(struct dma_chan *dchan, struct scatterlist *sgl,
 	struct scatterlist *sg;
 	dma_addr_t addr;
 	int i;
+
+pr_err("xgd: pdma: entered %s\n", __func__);
+pr_err("xgd: pdma: chan_id=%d dev_addr=0x%llx sg_len=%d dir=%s\n",
+       dchan->chan_id,
+       (unsigned long long)chan->dev_addr,
+       sg_len,
+       pdma_dir_str(dir));
 
 	if ((sgl == NULL) || (sg_len == 0))
 		return NULL;
@@ -740,6 +776,14 @@ mmp_pdma_prep_dma_cyclic(struct dma_chan *dchan,
 	struct mmp_pdma_device *pdev = to_mmp_pdma_dev(dchan->device);
 	struct mmp_pdma_desc_sw *first = NULL, *prev = NULL, *new;
 	dma_addr_t dma_src, dma_dst;
+
+pr_err("xgd: pdma: entered %s\n", __func__);
+pr_err("xgd: pdma: chan_id=%d buf_addr=0x%llx len=%zu period_len=%zu dir=%s\n",
+       dchan->chan_id,
+       (unsigned long long)buf_addr,
+       len,
+       period_len,
+       pdma_dir_str(direction));
 
 	if (!dchan || !len || !period_len)
 		return NULL;
@@ -879,6 +923,8 @@ static int mmp_pdma_terminate_all(struct dma_chan *dchan)
 {
 	struct mmp_pdma_chan *chan = to_mmp_pdma_chan(dchan);
 	unsigned long flags;
+pr_err("xgd: pdma: entered %s\n", __func__);
+pr_err("xgd: pdma: chan_id=%d\n", dchan ? dchan->chan_id : -1);
 
 	if (!dchan)
 		return -EINVAL;
@@ -903,13 +949,17 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 	u32 residue = 0;
 	bool passed = false;
 	bool cyclic = chan->cyclic_first != NULL;
+pr_err("xgd: pdma: entered %s\n", __func__);
+pr_err("xgd: pdma: chan_id=%d\n", chan->chan.chan_id);
 
 	/*
 	 * If the channel does not have a phy pointer anymore, it has already
 	 * been completed. Therefore, its residue is 0.
 	 */
 	if (!chan->phy)
+	{pr_err("xgd: pdma: channel does not have a phy. chan_id=%d residue=%u\n", chan->chan.chan_id, 0);
 		return 0;
+	}
 
 	if (chan->dir == DMA_DEV_TO_MEM)
 		curr = pdma_read_addr(chan->phy, pdev,
@@ -966,14 +1016,17 @@ static unsigned int mmp_pdma_residue(struct mmp_pdma_chan *chan,
 			continue;
 
 		if (sw->async_tx.cookie == cookie) {
+			pr_err("xgd: pdma: chan_id=%d residue=%u\n", chan->chan.chan_id, residue);
 			return residue;
 		} else {
+			pr_err("xgd: pdma: cookie dosn't match: chan_id=%d residue=%u\n", chan->chan.chan_id, residue);
 			residue = 0;
 			passed = false;
 		}
 	}
 
 	/* We should only get here in case of cyclic transactions */
+	pr_err("xgd: pdma: get here only in cyclic trans: chan_id=%d residue=%u\n", chan->chan.chan_id, residue);
 	return residue;
 }
 
