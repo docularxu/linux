@@ -352,6 +352,16 @@
 	pinctrl-0 = <&ssp3_0_cfg>;
 	pinctrl-names = "default";
 	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <26500000>;
+		m25p,fast-read;
+		broken-flash-reset;
+		vcc-supply = <&vcc_3v3_sys>;
+		status = "okay";
+	};
 };
 
 &uart0 {
