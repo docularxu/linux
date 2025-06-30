@@ -30,4 +30,31 @@
 			drive-strength = <11>;
 		};
 	};
+
+	/* TODO spi3, refer to v6.13 vendor tree */
+	/*
+	 *	K1X_PADCONF(GPIO_75, MUX_MODE2, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	ssp3_sclk
+	 *	K1X_PADCONF(GPIO_76, MUX_MODE2, (EDGE_NONE | PULL_UP  | PAD_3V_DS4))	ssp3_frm
+	 *	K1X_PADCONF(GPIO_77, MUX_MODE2, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	ssp3_txd
+	 *	K1X_PADCONF(GPIO_78, MUX_MODE2, (EDGE_NONE | PULL_DIS | PAD_3V_DS4))	ssp3_rxd
+	 */
+	ssp3_0_cfg: ssp3-0-cfg {
+		/* pull disabled: sclk, txd, rxd */
+		ssp3-0-no-pull-pins {
+			pinmux = <K1_PADCONF(75, 2)>,    /* ssp3_sclk */
+				 <K1_PADCONF(77, 2)>,    /* ssp3_txd  */
+				 <K1_PADCONF(78, 2)>;    /* ssp3_rxd  */
+
+			bias-disable;                    /* pull_dis */
+			drive-strength = <19>;           /* 3V_DS4 */
+			power-source = <3300>;           /* external power supply */
+		};
+		/* pull up: frm */
+		ssp3-0-frm-pins {
+			pinmux = <K1_PADCONF(76, 2)>;    /* ssp3_frm */
+			bias-pull-up = <0>;              /* normal pull-up */
+			drive-strength = <19>;           /* 3V_DS4 */
+			power-source = <3300>;           /* external power supply */
+		};
+	};
 };
