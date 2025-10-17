@@ -79,6 +79,14 @@
 		gpio = <&gpio K1_GPIO(123) GPIO_ACTIVE_HIGH>;
 		enable-active-high;
 	};
+
+	vcc_3v3_sys: vcc3v3-sys {
+		compatible = "regulator-fixed";
+		regulator-name = "VCC3V3_SYS";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
 };
 
 &combo_phy {
