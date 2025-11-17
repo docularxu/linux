@@ -332,16 +332,10 @@ static bool k1_spi_write(struct k1_spi_driver_data *drv_data)
 	return !tx->resid;
 }
 
-static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
+static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 				  struct spi_transfer *transfer)
 {
 	u32 val;
-
-	/* Each transfer can also specify a different rate */
-	if (k1_spi_set_speed(drv_data, transfer->speed_hz)) {
-		dev_err(drv_data->dev, "failed to set transfer speed\n");
-		return false;
-	}
 
 	k1_spi_flush(drv_data);
 
@@ -377,8 +371,6 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
 	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
 	writel(val, drv_data->base + SSP_INT_EN);
-
-	return true;
 }
 
 static int
@@ -386,11 +378,20 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		    struct spi_transfer *transfer)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	int ret;
 
 	/* Bits per word can change on a per-transfer basis */
 	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
 
-	return k1_spi_transfer_start(drv_data, transfer) ? 0 : -EIO;
+	/* Each transfer can also specify a different rate */
+	ret = k1_spi_set_speed(drv_data, transfer->speed_hz);
+	if (ret)
+		dev_err(drv_data->dev,
+			"failed to set transfer speed: %d\n", ret);
+	else
+		k1_spi_transfer_start(drv_data, transfer);
+
+	return ret;
 }
 
 static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
