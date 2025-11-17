@@ -129,14 +129,16 @@ static void k1_spi_flush(struct k1_spi_driver_data *drv_data)
 }
 
 /* Set the transfer speed; the SPI core code ensures it is supported */
-static bool k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
+static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 {
 	struct clk *clk = drv_data->clk;
 	u64 nsec_per_word;
 	u64 bus_ticks;
+	int ret;
 
-	if (clk_set_rate(clk, rate))
-		return false;
+	ret = clk_set_rate(clk, rate);
+	if (ret)
+		return ret;
 
 	drv_data->rate = clk_get_rate(clk);
 
@@ -166,7 +168,7 @@ static bool k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	bus_ticks = 3 * nsec_per_word * drv_data->bus_rate;
 	drv_data->rx_timeout = DIV_ROUND_UP_ULL(bus_ticks, NANOHZ_PER_HZ);
 
-	return true;
+	return 0;
 }
 
 static void k1_spi_set_cs(struct spi_device *spi, bool enable)
@@ -336,7 +338,7 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	u32 val;
 
 	/* Each transfer can also specify a different rate */
-	if (!k1_spi_set_speed(drv_data, transfer->speed_hz)) {
+	if (k1_spi_set_speed(drv_data, transfer->speed_hz)) {
 		dev_err(drv_data->dev, "failed to set transfer speed\n");
 		return false;
 	}
