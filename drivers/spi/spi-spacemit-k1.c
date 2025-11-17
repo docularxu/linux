@@ -85,12 +85,12 @@
 #define K1_SPI_THRESH		(K1_SPI_FIFO_SIZE / 2)
 
 struct k1_spi_io {
-	enum dma_data_direction dir;
-	struct dma_chan *chan;
+	// enum dma_data_direction dir;
+	// struct dma_chan *chan;
 	void *buf;
 	unsigned int resid;
-	u32 nents;
-	struct sg_table sgt;
+	// u32 nents;
+	// struct sg_table sgt;
 };
 
 struct k1_spi_driver_data {
@@ -106,18 +106,19 @@ struct k1_spi_driver_data {
 	struct k1_spi_io rx;
 	struct k1_spi_io tx;
 
-	void *dummy;			/* DMA disabled if NULL */
-	u32 base_addr;			/* DMA address corresponding to base */
+	// void *dummy;			/* DMA disabled if NULL */
+	// u32 base_addr;		/* DMA address corresponding to base */
 
 	struct spi_message *message;	/* Current message */
 
 	/* Current transfer information; not valid if message is null */
 	unsigned int len;
 	u32 bytes;			/* Bytes used for bits_per_word */
-	bool dma_mapped;
+	// bool dma_mapped;
 	struct completion completion;	/* Transfer completion */
 };
 
+#if 0
 static bool k1_spi_dma_enabled(struct k1_spi_driver_data *drv_data)
 {
 	return !!drv_data->dummy;
@@ -292,6 +293,7 @@ static void k1_spi_transfer_end_dma(struct k1_spi_driver_data *drv_data)
 	if (val & (SSP_STATUS_TUR | SSP_STATUS_ROR))
 		drv_data->message->status = -EIO;
 }
+#endif
 
 /* Discard any data in the RX FIFO */
 static void k1_spi_flush(struct k1_spi_driver_data *drv_data)
@@ -535,7 +537,7 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	drv_data->tx.resid = transfer->len;
 	drv_data->len = transfer->len;
 
-	drv_data->dma_mapped = k1_spi_map_dma_buffers(drv_data);
+	// drv_data->dma_mapped = k1_spi_map_dma_buffers(drv_data);
 
 	/* Set the RX timeout period (required for both DMA and PIO) */
 	val = FIELD_PREP(SSP_TIMEOUT_MASK, drv_data->rx_timeout);
@@ -551,9 +553,11 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	val |= TOP_SSE;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
+#if 0
 	/* DMA transfers are programmmed, then initiated */
 	if (drv_data->dma_mapped)
 		return k1_spi_transfer_start_dma(drv_data);
+#endif
 
 	/*
 	 * For PIO transfers, interrupts will cause words to get
@@ -589,10 +593,12 @@ static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 		return;
 
 	message->status = -EIO;
+#if 0
 	if (ret && drv_data->dma_mapped) {
 		dmaengine_terminate_sync(drv_data->tx.chan);
 		dmaengine_terminate_sync(drv_data->rx.chan);
 	}
+#endif
 }
 
 static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
@@ -601,8 +607,10 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 	struct spi_message *message = drv_data->message;
 	u32 val;
 
+#if 0
 	if (drv_data->dma_mapped)
 		k1_spi_transfer_end_dma(drv_data);
+#endif
 
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val &= ~TOP_SSE;
@@ -611,10 +619,12 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 
 	writel(0, drv_data->base + SSP_TIMEOUT);
 
+#if 0
 	if (drv_data->dma_mapped) {
 		k1_spi_unmap_dma_buffer(&drv_data->tx);
 		k1_spi_unmap_dma_buffer(&drv_data->rx);
 	}
+#endif
 
 	spi_transfer_delay_exec(transfer);
 
@@ -663,6 +673,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	return 0;
 }
 
+#if 0
 static int k1_spi_dma_setup_io(struct k1_spi_driver_data *drv_data, bool rx)
 {
 	struct dma_chan *chan;
@@ -768,6 +779,7 @@ static int devm_k1_spi_dma_setup(struct k1_spi_driver_data *drv_data)
 
 	return 0;
 }
+#endif
 
 static const struct of_device_id k1_spi_dt_ids[] = {
 	{ .compatible = "spacemit,k1-spi", },
@@ -789,8 +801,10 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 	host->bits_per_word_mask = SPI_BPW_RANGE_MASK(4, 32);
 	host->num_chipselect = 1;
 
+#if 0
 	if (k1_spi_dma_enabled(drv_data))
 		host->dma_alignment = K1_SPI_DMA_ALIGNMENT;
+#endif
 	host->setup = k1_spi_setup;
 	host->cleanup = k1_spi_cleanup;
 	host->transfer_one_message = k1_spi_transfer_one_message;
@@ -912,11 +926,13 @@ static int k1_spi_probe(struct platform_device *pdev)
 	if (IS_ERR(drv_data->base))
 		return dev_err_probe(dev, PTR_ERR(drv_data->base),
 				     "error mapping memory\n");
+#if 0
 	drv_data->base_addr = iores->start;
 
 	ret = devm_k1_spi_dma_setup(drv_data);
 	if (ret)
 		return dev_err_probe(dev, ret, "error setting up DMA\n");
+#endif
 
 	k1_spi_host_init(drv_data);
 
