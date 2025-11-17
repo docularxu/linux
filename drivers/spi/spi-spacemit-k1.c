@@ -335,9 +335,6 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 {
 	u32 val;
 
-	/* Bits per word can change on a per-transfer basis */
-	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
-
 	/* Each transfer can also specify a different rate */
 	if (!k1_spi_set_speed(drv_data, transfer->speed_hz)) {
 		dev_err(drv_data->dev, "failed to set transfer speed\n");
@@ -387,6 +384,9 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		    struct spi_transfer *transfer)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+
+	/* Bits per word can change on a per-transfer basis */
+	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
 
 	return k1_spi_transfer_start(drv_data, transfer) ? 0 : -EIO;
 }
