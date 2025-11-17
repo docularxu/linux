@@ -382,6 +382,15 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	return true;
 }
 
+static int
+k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
+		    struct spi_transfer *transfer)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+
+	return k1_spi_transfer_start(drv_data, transfer) ? 0 : -EIO;
+}
+
 static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 {
 	struct completion *completion = &drv_data->completion;
@@ -440,7 +449,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 		reinit_completion(completion);
 
 		/* Issue the next transfer */
-		if (!k1_spi_transfer_start(drv_data, transfer)) {
+		if (k1_spi_transfer_one(host, message->spi, transfer)) {
 			message->status = -EIO;
 			break;
 		}
