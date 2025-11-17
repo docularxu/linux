@@ -351,6 +351,21 @@ static bool k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	return true;
 }
 
+static void k1_spi_set_cs(struct spi_device *spi, bool enable)
+{
+	struct k1_spi_driver_data *drv_data;
+	u32 val;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	if (enable)
+		val |= TOP_HOLD_FRAME_LOW;
+	else
+		val &= ~TOP_HOLD_FRAME_LOW;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+}
+
 /*
  * The client can call the setup function multiple times, and each call
  * can specify a different SPI mode (and transfer speed).  Each transfer
@@ -370,7 +385,6 @@ static int k1_spi_setup(struct spi_device *spi)
 	 * support Motorola SPI format in master mode.
 	 */
 	val = FIELD_PREP(TOP_FRF_MASK, TOP_FRF_MOTOROLA);
-	val |= TOP_HOLD_FRAME_LOW;	/* Master mode */
 
 	/* Translate the mode into the value used to program the hardware. */
 	if (spi->mode & SPI_CPHA)
@@ -381,16 +395,23 @@ static int k1_spi_setup(struct spi_device *spi)
 		val |= TOP_LBM;		/* enable loopback */
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
+	k1_spi_set_cs(spi, true);
+
 	return 0;
 }
 
 static void k1_spi_cleanup(struct spi_device *spi)
 {
 	struct k1_spi_driver_data *drv_data;
+	u32 val;
 
 	drv_data = spi_controller_get_devdata(spi->controller);
 
-	writel(0, drv_data->base + SSP_TOP_CTRL);
+	k1_spi_set_cs(spi, false);
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	val &= TOP_FRF_MASK | TOP_SPO | TOP_SPH | TOP_LBM;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
 }
 
 static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
@@ -611,17 +632,13 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
 	struct completion *completion = &drv_data->completion;
 	struct spi_transfer *transfer;
-	u32 val;
 
 	drv_data->message = message;
 
 	/* Message status starts out successful; set to -EIO on error */
 	message->status = 0;
 
-	/* Hold frame low to avoid losing transferred data */
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val |= TOP_HOLD_FRAME_LOW;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
+	k1_spi_set_cs(message->spi, true);
 
 	list_for_each_entry(transfer, &message->transfers, transfer_list) {
 		reinit_completion(completion);
@@ -645,9 +662,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 
 	spi_finalize_current_message(drv_data->controller);
 
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val &= ~TOP_HOLD_FRAME_LOW;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
+	k1_spi_set_cs(message->spi, false);
 
 	return 0;
 }
