@@ -46,7 +46,7 @@
 #define TOP_SPH				BIT(11)		/* Half-cycle phase */
 #define TOP_LBM				BIT(12)		/* Loopback mode */
 #define TOP_TRAIL			BIT(13)		/* Trailing bytes */
-#define TOP_HOLD_FRAME_LOW		BIT(14)		/* Master mode */
+#define TOP_HOLD_FRAME_LOW		BIT(14)		/* Chip select */
 
 /* SSP FIFO Control Register */
 #define SSP_FIFO_CTRL		0x04
@@ -615,8 +615,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
  * can specify a different SPI mode (and transfer speed).  Each transfer
  * can specify its own speed though, and the core code ensures each
  * transfer's speed is set to something nonzero and supported by both
- * the controller and the device).  We just set the speed for each
- * transfer.
+ * the controller and the device.  We just set the speed for each transfer.
  */
 static int k1_spi_setup(struct spi_device *spi)
 {
@@ -781,8 +780,8 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 
 	if (k1_spi_dma_enabled(drv_data))
 		host->dma_alignment = K1_SPI_DMA_ALIGNMENT;
-	host->cleanup = k1_spi_cleanup;
 	host->setup = k1_spi_setup;
+	host->cleanup = k1_spi_cleanup;
 	host->transfer_one_message = k1_spi_transfer_one_message;
 
 	ret = of_property_read_u32(np, "spi-max-frequency", &max_speed_hz);
