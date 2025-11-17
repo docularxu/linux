@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
+
 /*
  * SpacemiT K1 SPI controller driver
  *
@@ -85,12 +86,8 @@
 #define K1_SPI_THRESH		(K1_SPI_FIFO_SIZE / 2)
 
 struct k1_spi_io {
-	// enum dma_data_direction dir;
-	// struct dma_chan *chan;
 	void *buf;
 	unsigned int resid;
-	// u32 nents;
-	// struct sg_table sgt;
 };
 
 struct k1_spi_driver_data {
@@ -106,194 +103,13 @@ struct k1_spi_driver_data {
 	struct k1_spi_io rx;
 	struct k1_spi_io tx;
 
-	// void *dummy;			/* DMA disabled if NULL */
-	// u32 base_addr;		/* DMA address corresponding to base */
-
 	struct spi_message *message;	/* Current message */
 
 	/* Current transfer information; not valid if message is null */
 	unsigned int len;
 	u32 bytes;			/* Bytes used for bits_per_word */
-	// bool dma_mapped;
 	struct completion completion;	/* Transfer completion */
 };
-
-#if 0
-static bool k1_spi_dma_enabled(struct k1_spi_driver_data *drv_data)
-{
-	return !!drv_data->dummy;
-}
-
-static bool k1_spi_map_dma_buffer(struct k1_spi_io *io, size_t len, void *dummy)
-{
-	struct device *dmadev = io->chan->device->dev;
-	unsigned int nents = DIV_ROUND_UP(len, SZ_2K);
-	struct sg_table *sgt = &io->sgt;
-	void *bufp = io->buf ? : dummy;
-	struct scatterlist *sg;
-	unsigned int i;
-
-	if (nents != sgt->nents) {
-		sg_free_table(sgt);
-		if (sg_alloc_table(sgt, nents, GFP_KERNEL))
-			return false;
-	}
-
-	for_each_sg(sgt->sgl, sg, nents, i) {
-		size_t bytes = min_t(size_t, len, SZ_2K);
-
-		sg_set_buf(sg, bufp, bytes);
-		if (bufp != dummy)
-			bufp += bytes;
-		len -= bytes;
-	}
-	io->nents = dma_map_sg(dmadev, sgt->sgl, nents, io->dir);
-
-	return !!io->nents;
-}
-
-static void k1_spi_unmap_dma_buffer(struct k1_spi_io *io)
-{
-	struct sg_table *sgt = &io->sgt;
-
-	dma_unmap_sg(io->chan->device->dev, sgt->sgl, io->nents, io->dir);
-	io->nents = 0;
-}
-
-static bool k1_spi_map_dma_buffers(struct k1_spi_driver_data *drv_data)
-{
-	u32 dma_burst_size;
-	void *dummy;
-
-	if (!k1_spi_dma_enabled(drv_data))
-		return false;
-
-	dma_burst_size = K1_SPI_THRESH * drv_data->bytes;
-
-	/* Don't bother with DMA if we can't do even a single burst */
-	if (drv_data->len < dma_burst_size)
-		return false;
-
-	/* We won't use DMA if the transfer is too big, either */
-	if (drv_data->len > K1_SPI_MAX_DMA_LEN)
-		return false;
-
-	/* Map both directions for DMA; if either fails, we'll use PIO */
-	dummy = drv_data->dummy;
-	if (!k1_spi_map_dma_buffer(&drv_data->rx, drv_data->len, dummy))
-		return false;
-
-	if (k1_spi_map_dma_buffer(&drv_data->tx, drv_data->len, dummy))
-		return true;		/* Success! */
-
-	/* Failed to map the RX buffer; undo the TX mapping */
-	k1_spi_unmap_dma_buffer(&drv_data->rx);
-
-	return false;
-}
-
-static struct dma_async_tx_descriptor *
-k1_spi_prepare_dma_io(struct k1_spi_driver_data *drv_data, struct k1_spi_io *io)
-{
-	u32 addr = drv_data->base_addr + SSP_DATAR;
-	struct dma_slave_config cfg = { };
-	enum dma_transfer_direction dir;
-	enum dma_slave_buswidth width;
-	u32 dma_burst_size;
-	int ret;
-
-	dir = io->dir == DMA_TO_DEVICE ? DMA_MEM_TO_DEV
-				       : DMA_DEV_TO_MEM;
-
-	width = drv_data->bytes == 1 ? DMA_SLAVE_BUSWIDTH_1_BYTE :
-		drv_data->bytes == 2 ? DMA_SLAVE_BUSWIDTH_2_BYTES
-		/* bytes == 4 */     : DMA_SLAVE_BUSWIDTH_4_BYTES;
-
-	dma_burst_size = K1_SPI_THRESH * drv_data->bytes;
-
-	cfg.direction = dir;
-	if (dir == DMA_MEM_TO_DEV) {
-		cfg.dst_addr = addr;
-		cfg.dst_addr_width = width;
-		cfg.dst_maxburst = dma_burst_size;
-	} else {
-		cfg.src_addr = addr;
-		cfg.src_addr_width = width;
-		cfg.src_maxburst = dma_burst_size;
-	}
-
-	ret = dmaengine_slave_config(io->chan, &cfg);
-	if (ret)
-		return NULL;
-
-	return dmaengine_prep_slave_sg(io->chan, io->sgt.sgl, io->nents, dir,
-				       DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
-}
-
-/* DMA completion callback */
-static void k1_spi_callback(void *data)
-{
-	complete(data);
-}
-
-static bool k1_spi_transfer_start_dma(struct k1_spi_driver_data *drv_data)
-{
-	struct dma_async_tx_descriptor *rx_desc;
-	struct dma_async_tx_descriptor *tx_desc;
-	struct device *dev = drv_data->dev;
-	u32 val;
-
-	rx_desc = k1_spi_prepare_dma_io(drv_data, &drv_data->rx);
-	if (!rx_desc) {
-		dev_err(dev, "failed to get DMA RX descriptor\n");
-		return false;
-	}
-
-	tx_desc = k1_spi_prepare_dma_io(drv_data, &drv_data->tx);
-	if (!tx_desc) {
-		dev_err(dev, "failed to get DMA TX descriptor\n");
-		return false;
-	}
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val |= TOP_TRAIL;	/* Trailing bytes handled by DMA */
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-
-	val = readl(drv_data->base + SSP_FIFO_CTRL);
-	val |= FIFO_TSRE | FIFO_RSRE;
-	writel(val, drv_data->base + SSP_FIFO_CTRL);
-
-	/* When RX is complete we also know TX has completed */
-	rx_desc->callback = k1_spi_callback;
-	rx_desc->callback_param = &drv_data->completion;
-
-	dmaengine_submit(rx_desc);
-	dmaengine_submit(tx_desc);
-
-	dma_async_issue_pending(drv_data->rx.chan);
-	dma_async_issue_pending(drv_data->tx.chan);
-
-	return true;
-}
-
-static void k1_spi_transfer_end_dma(struct k1_spi_driver_data *drv_data)
-{
-	u32 val;
-
-	val = readl(drv_data->base + SSP_FIFO_CTRL);
-	val &= ~(FIFO_TSRE | FIFO_RSRE);
-	writel(val, drv_data->base + SSP_FIFO_CTRL);
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val &= ~TOP_TRAIL;		/* Trailing bytes handled by the CPU */
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-
-	/* Signal an error if an RX overrun or TX underrun occurred */
-	val = readl(drv_data->base + SSP_STATUS);
-	if (val & (SSP_STATUS_TUR | SSP_STATUS_ROR))
-		drv_data->message->status = -EIO;
-}
-#endif
 
 /* Discard any data in the RX FIFO */
 static void k1_spi_flush(struct k1_spi_driver_data *drv_data)
@@ -537,8 +353,6 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	drv_data->tx.resid = transfer->len;
 	drv_data->len = transfer->len;
 
-	// drv_data->dma_mapped = k1_spi_map_dma_buffers(drv_data);
-
 	/* Set the RX timeout period (required for both DMA and PIO) */
 	val = FIELD_PREP(SSP_TIMEOUT_MASK, drv_data->rx_timeout);
 	writel(val, drv_data->base + SSP_TIMEOUT);
@@ -552,12 +366,6 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
 	val |= TOP_SSE;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
-
-#if 0
-	/* DMA transfers are programmmed, then initiated */
-	if (drv_data->dma_mapped)
-		return k1_spi_transfer_start_dma(drv_data);
-#endif
 
 	/*
 	 * For PIO transfers, interrupts will cause words to get
@@ -593,12 +401,6 @@ static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 		return;
 
 	message->status = -EIO;
-#if 0
-	if (ret && drv_data->dma_mapped) {
-		dmaengine_terminate_sync(drv_data->tx.chan);
-		dmaengine_terminate_sync(drv_data->rx.chan);
-	}
-#endif
 }
 
 static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
@@ -607,24 +409,12 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 	struct spi_message *message = drv_data->message;
 	u32 val;
 
-#if 0
-	if (drv_data->dma_mapped)
-		k1_spi_transfer_end_dma(drv_data);
-#endif
-
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val &= ~TOP_SSE;
 	val &= ~TOP_DSS_MASK;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
 	writel(0, drv_data->base + SSP_TIMEOUT);
-
-#if 0
-	if (drv_data->dma_mapped) {
-		k1_spi_unmap_dma_buffer(&drv_data->tx);
-		k1_spi_unmap_dma_buffer(&drv_data->rx);
-	}
-#endif
 
 	spi_transfer_delay_exec(transfer);
 
@@ -673,114 +463,6 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	return 0;
 }
 
-#if 0
-static int k1_spi_dma_setup_io(struct k1_spi_driver_data *drv_data, bool rx)
-{
-	struct dma_chan *chan;
-	struct k1_spi_io *io;
-
-	chan = dma_request_chan(drv_data->dev, rx ? "rx" : "tx");
-	if (IS_ERR(chan))
-		return PTR_ERR(chan);
-
-	io = rx ? &drv_data->rx : &drv_data->tx;
-	io->dir = rx ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
-	io->chan = chan;
-
-	return 0;
-}
-
-static void k1_spi_dma_cleanup_io(struct k1_spi_driver_data *drv_data, bool rx)
-{
-	struct k1_spi_io *io = rx ? &drv_data->rx : &drv_data->tx;
-
-	dmaengine_terminate_sync(io->chan);
-	sg_free_table(&io->sgt);
-
-	dma_release_channel(io->chan);
-}
-
-static int k1_spi_dma_setup(struct k1_spi_driver_data *drv_data)
-{
-	struct device *dev = drv_data->dev;
-	int rx_ret;
-	int tx_ret;
-
-	/* We must get both DMA channels, or neither of them */
-	rx_ret = k1_spi_dma_setup_io(drv_data, true);
-	if (rx_ret == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
-
-	tx_ret = k1_spi_dma_setup_io(drv_data, false);
-
-	/* If neither is specified, we don't use DMA (as intended) */
-	if (rx_ret == -ENODEV && tx_ret == -ENODEV)
-		return 0;		/* Success!  PIO will be used */
-
-	if (rx_ret || tx_ret)
-		goto err_cleanup;
-
-	drv_data->dummy = kzalloc(SZ_2K, GFP_KERNEL);
-	if (drv_data->dummy)
-		return 0;		/* Success!  DMA will be used */
-
-	dev_warn(dev, "error allocating DMA dummy buffer; DMA disabled\n");
-err_cleanup:
-	if (!tx_ret)
-		k1_spi_dma_cleanup_io(drv_data, false);
-	else if (tx_ret == -EPROBE_DEFER)
-		return -EPROBE_DEFER;
-
-	if (rx_ret)
-		dev_err(dev, "error requesting DMA RX DMA channel\n");
-	else
-		k1_spi_dma_cleanup_io(drv_data, true);
-
-	/* Return success if we don't get the dummy buffer; PIO will be used */
-
-	return rx_ret ? : tx_ret ? : 0;
-}
-
-static void k1_spi_dma_cleanup(struct device *dev, void *res)
-{
-	struct k1_spi_driver_data *drv_data;
-
-	drv_data = *(struct k1_spi_driver_data **)res;
-	if (!k1_spi_dma_enabled(drv_data))
-		return;
-
-	kfree(drv_data->dummy);
-	k1_spi_dma_cleanup_io(drv_data, false);
-	k1_spi_dma_cleanup_io(drv_data, true);
-}
-
-static int devm_k1_spi_dma_setup(struct k1_spi_driver_data *drv_data)
-{
-	struct k1_spi_driver_data **ptr;
-	int ret;
-
-	if (!IS_ENABLED(CONFIG_MMP_PDMA)) {
-		dev_warn(drv_data->dev, "DMA not available; using PIO\n");
-		return 0;
-	}
-
-	ptr = devres_alloc(k1_spi_dma_cleanup, sizeof(*ptr), GFP_KERNEL);
-	if (!ptr)
-		return -ENOMEM;
-
-	ret = k1_spi_dma_setup(drv_data);
-	if (ret) {
-		devres_free(ptr);
-		return ret;
-	}
-
-	*ptr = drv_data;
-	devres_add(drv_data->dev, ptr);
-
-	return 0;
-}
-#endif
-
 static const struct of_device_id k1_spi_dt_ids[] = {
 	{ .compatible = "spacemit,k1-spi", },
 	{}
@@ -801,10 +483,6 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 	host->bits_per_word_mask = SPI_BPW_RANGE_MASK(4, 32);
 	host->num_chipselect = 1;
 
-#if 0
-	if (k1_spi_dma_enabled(drv_data))
-		host->dma_alignment = K1_SPI_DMA_ALIGNMENT;
-#endif
 	host->setup = k1_spi_setup;
 	host->cleanup = k1_spi_cleanup;
 	host->transfer_one_message = k1_spi_transfer_one_message;
@@ -926,13 +604,6 @@ static int k1_spi_probe(struct platform_device *pdev)
 	if (IS_ERR(drv_data->base))
 		return dev_err_probe(dev, PTR_ERR(drv_data->base),
 				     "error mapping memory\n");
-#if 0
-	drv_data->base_addr = iores->start;
-
-	ret = devm_k1_spi_dma_setup(drv_data);
-	if (ret)
-		return dev_err_probe(dev, ret, "error setting up DMA\n");
-#endif
 
 	k1_spi_host_init(drv_data);
 
