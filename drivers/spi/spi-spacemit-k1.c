@@ -351,6 +351,48 @@ static bool k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	return true;
 }
 
+/*
+ * The client can call the setup function multiple times, and each call
+ * can specify a different SPI mode (and transfer speed).  Each transfer
+ * can specify its own speed though, and the core code ensures each
+ * transfer's speed is set to something nonzero and supported by both
+ * the controller and the device.  We just set the speed for each transfer.
+ */
+static int k1_spi_setup(struct spi_device *spi)
+{
+	struct k1_spi_driver_data *drv_data;
+	u32 val;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	/*
+	 * Configure the message format for this device.  We only
+	 * support Motorola SPI format in master mode.
+	 */
+	val = FIELD_PREP(TOP_FRF_MASK, TOP_FRF_MOTOROLA);
+	val |= TOP_HOLD_FRAME_LOW;	/* Master mode */
+
+	/* Translate the mode into the value used to program the hardware. */
+	if (spi->mode & SPI_CPHA)
+		val |= TOP_SPH;		/* 1/2 cycle */
+	if (spi->mode & SPI_CPOL)
+		val |= TOP_SPO;		/* active low */
+	if (spi->mode & SPI_LOOP)
+		val |= TOP_LBM;		/* enable loopback */
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+
+	return 0;
+}
+
+static void k1_spi_cleanup(struct spi_device *spi)
+{
+	struct k1_spi_driver_data *drv_data;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	writel(0, drv_data->base + SSP_TOP_CTRL);
+}
+
 static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
 {
 	struct k1_spi_io *rx = &drv_data->rx;
@@ -511,6 +553,31 @@ static bool k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	return true;
 }
 
+static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
+{
+	struct completion *completion = &drv_data->completion;
+	struct spi_message *message = drv_data->message;
+	unsigned long timeout;
+	int ret;
+
+	/* Length in bits to be transferred */
+	timeout = BITS_PER_BYTE * drv_data->bytes * drv_data->len;
+	/* Time (usec) to transfer that many bits at the current bit rate */
+	timeout = DIV_ROUND_UP(timeout * MICROHZ_PER_HZ, drv_data->rate);
+	/* Convert that (+ 25%) to jiffies for the wait call */
+	timeout = usecs_to_jiffies(5 * timeout / 4);
+
+	ret = wait_for_completion_interruptible_timeout(completion, timeout);
+	if (ret > 0)
+		return;
+
+	message->status = -EIO;
+	if (ret && drv_data->dma_mapped) {
+		dmaengine_terminate_sync(drv_data->tx.chan);
+		dmaengine_terminate_sync(drv_data->rx.chan);
+	}
+}
+
 static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 				struct spi_transfer *transfer)
 {
@@ -536,31 +603,6 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 
 	if (!message->status)
 		message->actual_length += drv_data->len;
-}
-
-static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
-{
-	struct completion *completion = &drv_data->completion;
-	struct spi_message *message = drv_data->message;
-	unsigned long timeout;
-	int ret;
-
-	/* Length in bits to be transferred */
-	timeout = BITS_PER_BYTE * drv_data->bytes * drv_data->len;
-	/* Time (usec) to transfer that many bits at the current bit rate */
-	timeout = DIV_ROUND_UP(timeout * MICROHZ_PER_HZ, drv_data->rate);
-	/* Convert that (+ 25%) to jiffies for the wait call */
-	timeout = usecs_to_jiffies(5 * timeout / 4);
-
-	ret = wait_for_completion_interruptible_timeout(completion, timeout);
-	if (ret > 0)
-		return;
-
-	message->status = -EIO;
-	if (ret && drv_data->dma_mapped) {
-		dmaengine_terminate_sync(drv_data->tx.chan);
-		dmaengine_terminate_sync(drv_data->rx.chan);
-	}
 }
 
 static int k1_spi_transfer_one_message(struct spi_controller *host,
@@ -608,48 +650,6 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
 	return 0;
-}
-
-/*
- * The client can call the setup function multiple times, and each call
- * can specify a different SPI mode (and transfer speed).  Each transfer
- * can specify its own speed though, and the core code ensures each
- * transfer's speed is set to something nonzero and supported by both
- * the controller and the device.  We just set the speed for each transfer.
- */
-static int k1_spi_setup(struct spi_device *spi)
-{
-	struct k1_spi_driver_data *drv_data;
-	u32 val;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-
-	/*
-	 * Configure the message format for this device.  We only
-	 * support Motorola SPI format in master mode.
-	 */
-	val = FIELD_PREP(TOP_FRF_MASK, TOP_FRF_MOTOROLA);
-	val |= TOP_HOLD_FRAME_LOW;	/* Master mode */
-
-	/* Translate the mode into the value used to program the hardware. */
-	if (spi->mode & SPI_CPHA)
-		val |= TOP_SPH;		/* 1/2 cycle */
-	if (spi->mode & SPI_CPOL)
-		val |= TOP_SPO;		/* active low */
-	if (spi->mode & SPI_LOOP)
-		val |= TOP_LBM;		/* enable loopback */
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-
-	return 0;
-}
-
-static void k1_spi_cleanup(struct spi_device *spi)
-{
-	struct k1_spi_driver_data *drv_data;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-
-	writel(0, drv_data->base + SSP_TOP_CTRL);
 }
 
 static int k1_spi_dma_setup_io(struct k1_spi_driver_data *drv_data, bool rx)
