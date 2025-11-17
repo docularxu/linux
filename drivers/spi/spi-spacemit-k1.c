@@ -395,8 +395,6 @@ static int k1_spi_setup(struct spi_device *spi)
 		val |= TOP_LBM;		/* enable loopback */
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
-	k1_spi_set_cs(spi, true);
-
 	return 0;
 }
 
@@ -406,8 +404,6 @@ static void k1_spi_cleanup(struct spi_device *spi)
 	u32 val;
 
 	drv_data = spi_controller_get_devdata(spi->controller);
-
-	k1_spi_set_cs(spi, false);
 
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val &= TOP_FRF_MASK | TOP_SPO | TOP_SPH | TOP_LBM;
