@@ -97,7 +97,6 @@ struct k1_spi_driver_data {
 	unsigned long bus_rate;
 	struct clk *clk;
 	unsigned long rate;
-	u32 rx_timeout;
 	int irq;
 
 	struct k1_spi_io rx;
@@ -134,6 +133,8 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	struct clk *clk = drv_data->clk;
 	u64 nsec_per_word;
 	u64 bus_ticks;
+	u32 timeout;
+	u32 val;
 	int ret;
 
 	ret = clk_set_rate(clk, rate);
@@ -149,28 +150,32 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	/*
 	 * Compute the RX FIFO inactivity timeout value that should be used.
 	 * The inactivity timer restarts with each word that lands in the
-	 * FIFO.  If two or more "word transfer times" pass without any new
-	 * data in the RX FIFO, we might as well read what's there.
+	 * FIFO.  If several "word transfer times" pass without any new data
+	 * in the RX FIFO, we might as well read what's there.
 	 *
 	 * The rate at which words land in the FIFO is determined by the
 	 * word size and the transfer rate.  One bit is transferred per
 	 * clock tick, and 8 (or 16 or 32) bits are transferred per word.
 	 *
 	 * So we can get word transfer time (in nanoseconds) from:
-	 *   nsec_per_tick = NANOHZ_PER_HZ / drv_data->rate;
+	 *   nsec_per_tick = NSEC_PER_SEC / drv_data->rate;
 	 *   ticks_per_word = BITS_PER_BYTE * drv_data->bytes;
 	 * We do the divide last for better accuracy.
 	 */
-	nsec_per_word = NANOHZ_PER_HZ * BITS_PER_BYTE * drv_data->bytes;
+	nsec_per_word = NSEC_PER_SEC * BITS_PER_BYTE * drv_data->bytes;
 	nsec_per_word = DIV_ROUND_UP_ULL(nsec_per_word, drv_data->rate);
 
 	/*
 	 * The timeout (which we'll set to three word transfer times) is
 	 * expressed as a number of APB clock ticks.
-	 *   bus_ticks = 3 * nsec * (drv_data->bus_rate / NANOHZ_PER_HZ)
+	 *   bus_ticks = 3 * nsec * (drv_data->bus_rate / NSEC_PER_SEC)
 	 */
 	bus_ticks = 3 * nsec_per_word * drv_data->bus_rate;
-	drv_data->rx_timeout = DIV_ROUND_UP_ULL(bus_ticks, NANOHZ_PER_HZ);
+	timeout = DIV_ROUND_UP_ULL(bus_ticks, NSEC_PER_SEC);
+
+	/* Set the RX timeout period (required for both DMA and PIO) */
+	val = FIELD_PREP(SSP_TIMEOUT_MASK, timeout);
+	writel(val, drv_data->base + SSP_TIMEOUT);
 
 	return 0;
 }
@@ -387,14 +392,6 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		dev_err(drv_data->dev,
 			"failed to set transfer speed: %d\n", ret);
 		return ret;
-	}
-
-	if (transfer->rx_buf) {
-		u32 val;
-
-		/* Set the RX timeout period (required for both DMA and PIO) */
-		val = FIELD_PREP(SSP_TIMEOUT_MASK, drv_data->rx_timeout);
-		writel(val, drv_data->base + SSP_TIMEOUT);
 	}
 
 	k1_spi_transfer_start(drv_data, transfer);
