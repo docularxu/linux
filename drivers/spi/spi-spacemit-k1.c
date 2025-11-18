@@ -235,7 +235,7 @@ static void k1_spi_cleanup(struct spi_device *spi)
 	drv_data = spi_controller_get_devdata(spi->controller);
 
 	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val &= TOP_FRF_MASK | TOP_SPO | TOP_SPH | TOP_LBM;
+	val &= ~(TOP_FRF_MASK | TOP_SPO | TOP_SPH | TOP_LBM);
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 }
 
