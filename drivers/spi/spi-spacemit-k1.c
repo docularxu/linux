@@ -337,8 +337,6 @@ static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 {
 	u32 val;
 
-	k1_spi_flush(drv_data);
-
 	/* Record the current transfer information */
 	drv_data->rx.buf = transfer->rx_buf;
 	drv_data->rx.resid = transfer->len;
@@ -441,8 +439,6 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	struct completion *completion = &drv_data->completion;
 	struct spi_transfer *transfer;
 
-	drv_data->message = message;
-
 	/* Message status starts out successful; set to -EIO on error */
 	message->status = 0;
 
@@ -475,6 +471,24 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	return 0;
 }
 
+static int k1_spi_prepare_message(struct spi_controller *host,
+				  struct spi_message *message)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+
+	drv_data->message = message;
+
+	k1_spi_flush(drv_data);
+
+	return 0;
+}
+
+static int k1_spi_unprepare_message(struct spi_controller *host,
+				    struct spi_message *message)
+{
+	return 0;
+}
+
 static const struct of_device_id k1_spi_dt_ids[] = {
 	{ .compatible = "spacemit,k1-spi", },
 	{}
@@ -498,6 +512,8 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 	host->setup = k1_spi_setup;
 	host->cleanup = k1_spi_cleanup;
 	host->transfer_one_message = k1_spi_transfer_one_message;
+	host->prepare_message = k1_spi_prepare_message;
+	host->unprepare_message = k1_spi_unprepare_message;
 
 	ret = of_property_read_u32(np, "spi-max-frequency", &max_speed_hz);
 	if (!ret) {
