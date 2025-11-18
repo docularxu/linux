@@ -346,10 +346,6 @@ static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 {
 	u32 val;
 
-	/* Clear any existing interrupt conditions */
-	val = readl(drv_data->base + SSP_STATUS);
-	writel(val, drv_data->base + SSP_STATUS);
-
 	/* Set the data size and enable the hardware */
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
@@ -363,6 +359,10 @@ static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 	 * things started.
 	 */
 	(void)k1_spi_write(drv_data);
+
+	/* Clear any existing interrupt conditions */
+	val = readl(drv_data->base + SSP_STATUS);
+	writel(val, drv_data->base + SSP_STATUS);
 
 	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
 	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
