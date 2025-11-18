@@ -346,12 +346,6 @@ static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 {
 	u32 val;
 
-	/* Set the data size and enable the hardware */
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
-	val |= TOP_SSE;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-
 	/*
 	 * For PIO transfers, interrupts will cause words to get
 	 * transferred.  The interrupts will get disabled as the
@@ -374,6 +368,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		    struct spi_transfer *transfer)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 val;
 	int ret;
 
 	/* Record the current transfer information */
@@ -393,6 +388,12 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 			"failed to set transfer speed: %d\n", ret);
 		return ret;
 	}
+
+	/* Set the data size,  and enable the hardware */
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
+	val |= TOP_SSE;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
 
 	k1_spi_transfer_start(drv_data, transfer);
 
@@ -428,7 +429,6 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val &= ~TOP_SSE;
-	val &= ~TOP_DSS_MASK;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
 	if (drv_data->rx.buf)
