@@ -142,6 +142,10 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 
 	drv_data->rate = clk_get_rate(clk);
 
+	/* No need for RX FIFO timeout if we're not receiving anything */
+	if (!drv_data->rx.buf)
+		return 0;
+
 	/*
 	 * Compute the RX FIFO inactivity timeout value that should be used.
 	 * The inactivity timer restarts with each word that lands in the
@@ -337,10 +341,6 @@ static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 {
 	u32 val;
 
-	/* Set the RX timeout period (required for both DMA and PIO) */
-	val = FIELD_PREP(SSP_TIMEOUT_MASK, drv_data->rx_timeout);
-	writel(val, drv_data->base + SSP_TIMEOUT);
-
 	/* Clear any existing interrupt conditions */
 	val = readl(drv_data->base + SSP_STATUS);
 	writel(val, drv_data->base + SSP_STATUS);
@@ -383,11 +383,21 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 
 	/* Each transfer can also specify a different rate */
 	ret = k1_spi_set_speed(drv_data, transfer->speed_hz);
-	if (ret)
+	if (ret) {
 		dev_err(drv_data->dev,
 			"failed to set transfer speed: %d\n", ret);
-	else
-		k1_spi_transfer_start(drv_data, transfer);
+		return ret;
+	}
+
+	if (transfer->rx_buf) {
+		u32 val;
+
+		/* Set the RX timeout period (required for both DMA and PIO) */
+		val = FIELD_PREP(SSP_TIMEOUT_MASK, drv_data->rx_timeout);
+		writel(val, drv_data->base + SSP_TIMEOUT);
+	}
+
+	k1_spi_transfer_start(drv_data, transfer);
 
 	return ret;
 }
@@ -424,7 +434,8 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 	val &= ~TOP_DSS_MASK;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
-	writel(0, drv_data->base + SSP_TIMEOUT);
+	if (drv_data->rx.buf)
+		writel(0, drv_data->base + SSP_TIMEOUT);
 
 	spi_transfer_delay_exec(transfer);
 
