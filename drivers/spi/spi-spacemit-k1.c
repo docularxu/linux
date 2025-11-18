@@ -337,13 +337,6 @@ static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
 {
 	u32 val;
 
-	/* Record the current transfer information */
-	drv_data->rx.buf = transfer->rx_buf;
-	drv_data->rx.resid = transfer->len;
-	drv_data->tx.buf = (void *)transfer->tx_buf;
-	drv_data->tx.resid = transfer->len;
-	drv_data->len = transfer->len;
-
 	/* Set the RX timeout period (required for both DMA and PIO) */
 	val = FIELD_PREP(SSP_TIMEOUT_MASK, drv_data->rx_timeout);
 	writel(val, drv_data->base + SSP_TIMEOUT);
@@ -377,6 +370,13 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
 	int ret;
+
+	/* Record the current transfer information */
+	drv_data->rx.buf = transfer->rx_buf;
+	drv_data->rx.resid = transfer->len;
+	drv_data->tx.buf = (void *)transfer->tx_buf;
+	drv_data->tx.resid = transfer->len;
+	drv_data->len = transfer->len;
 
 	/* Bits per word can change on a per-transfer basis */
 	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
