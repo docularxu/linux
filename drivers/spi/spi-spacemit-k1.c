@@ -341,28 +341,6 @@ static bool k1_spi_write(struct k1_spi_driver_data *drv_data)
 	return !tx->resid;
 }
 
-static void k1_spi_transfer_start(struct k1_spi_driver_data *drv_data,
-				  struct spi_transfer *transfer)
-{
-	u32 val;
-
-	/*
-	 * For PIO transfers, interrupts will cause words to get
-	 * transferred.  The interrupts will get disabled as the
-	 * transfer completes.  We'll write what we can to get
-	 * things started.
-	 */
-	(void)k1_spi_write(drv_data);
-
-	/* Clear any existing interrupt conditions */
-	val = readl(drv_data->base + SSP_STATUS);
-	writel(val, drv_data->base + SSP_STATUS);
-
-	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
-	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
-	writel(val, drv_data->base + SSP_INT_EN);
-}
-
 static int
 k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		    struct spi_transfer *transfer)
@@ -395,7 +373,21 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	val |= TOP_SSE;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
-	k1_spi_transfer_start(drv_data, transfer);
+	/*
+	 * For PIO transfers, interrupts will cause words to get
+	 * transferred.  The interrupts will get disabled as the
+	 * transfer completes.  We'll write what we can to get
+	 * things started.
+	 */
+	(void)k1_spi_write(drv_data);
+
+	/* Clear any existing interrupt conditions */
+	val = readl(drv_data->base + SSP_STATUS);
+	writel(val, drv_data->base + SSP_STATUS);
+
+	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
+	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
+	writel(val, drv_data->base + SSP_INT_EN);
 
 	return ret;
 }
