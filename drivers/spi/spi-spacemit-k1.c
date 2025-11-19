@@ -418,9 +418,6 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 {
 	struct spi_message *message = drv_data->message;
 
-	if (drv_data->rx.buf)
-		writel(0, drv_data->base + SSP_TIMEOUT);
-
 	spi_transfer_delay_exec(transfer);
 
 	if (!message->status)
@@ -581,6 +578,10 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	/* Drain the RX FIFO first, then transmit what we can */
 	rx_done = k1_spi_read(drv_data);
 	tx_done = k1_spi_write(drv_data);
+
+	/* If we're done with receiving, disable the timeout */
+	if (rx_done && drv_data->rx.buf)
+		writel(0, drv_data->base + SSP_TIMEOUT);
 
 	/* Disable interrupts if we're done transferring either direction */
 	if (rx_done || tx_done) {
