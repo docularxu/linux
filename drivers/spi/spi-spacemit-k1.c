@@ -413,17 +413,6 @@ static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 	message->status = -EIO;
 }
 
-static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
-				struct spi_transfer *transfer)
-{
-	struct spi_message *message = drv_data->message;
-
-	spi_transfer_delay_exec(transfer);
-
-	if (!message->status)
-		message->actual_length += drv_data->len;
-}
-
 static int k1_spi_transfer_one_message(struct spi_controller *host,
 					   struct spi_message *message)
 {
@@ -447,7 +436,10 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 
 		k1_spi_transfer_wait(drv_data);
 
-		k1_spi_transfer_end(drv_data, transfer);
+		spi_transfer_delay_exec(transfer);
+
+		if (!message->status)
+			message->actual_length += drv_data->len;
 
 		/* If an error has occurred, we're done */
 		if (message->status)
