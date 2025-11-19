@@ -386,7 +386,8 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	 * transfer completes.  We'll write what we can to get
 	 * things started.
 	 */
-	(void)k1_spi_write(drv_data);
+	if (drv_data->tx.buf)
+		(void)k1_spi_write(drv_data);
 
 	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
 	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
