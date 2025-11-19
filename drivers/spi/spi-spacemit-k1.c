@@ -392,12 +392,11 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	return ret;
 }
 
-static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
+static int k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 {
 	struct completion *completion = &drv_data->completion;
-	struct spi_message *message = drv_data->message;
 	unsigned long timeout;
-	int ret;
+	unsigned long ms;
 
 	/* Length in bits to be transferred */
 	timeout = BITS_PER_BYTE * drv_data->bytes * drv_data->len;
@@ -406,11 +405,11 @@ static void k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 	/* Convert that (+ 25%) to jiffies for the wait call */
 	timeout = usecs_to_jiffies(5 * timeout / 4);
 
-	ret = wait_for_completion_interruptible_timeout(completion, timeout);
-	if (ret > 0)
-		return;
+	ms = wait_for_completion_interruptible_timeout(completion, timeout);
+	if (!ms)
+		return -ETIMEDOUT;
 
-	message->status = -EIO;
+	return 0;
 }
 
 static int k1_spi_transfer_one_message(struct spi_controller *host,
@@ -419,6 +418,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
 	struct completion *completion = &drv_data->completion;
 	struct spi_transfer *transfer;
+	int ret;
 
 	/* Message status starts out successful; set to -EIO on error */
 	message->status = 0;
@@ -434,7 +434,11 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 			break;
 		}
 
-		k1_spi_transfer_wait(drv_data);
+		ret = k1_spi_transfer_wait(drv_data);
+		if (ret < 0) {
+			message->status = ret;
+			break;
+		}
 
 		spi_transfer_delay_exec(transfer);
 
