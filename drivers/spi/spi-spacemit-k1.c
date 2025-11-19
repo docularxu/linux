@@ -103,6 +103,7 @@ struct k1_spi_driver_data {
 	struct k1_spi_io tx;
 
 	struct spi_message *message;	/* Current message */
+	struct spi_transfer *transfer;	/* Current transfer within message */
 
 	/* Current transfer information; not valid if message is null */
 	unsigned int len;
@@ -367,6 +368,8 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		return ret;
 	}
 
+	drv_data->transfer = transfer;
+
 	/* Set the data size,  and enable the hardware */
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
@@ -409,6 +412,9 @@ static int k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 	if (!ms)
 		return -ETIMEDOUT;
 
+	if (drv_data->transfer->error & SPI_TRANS_FAIL_IO)
+		return -EIO;
+
 	return 0;
 }
 
@@ -444,6 +450,8 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 
 		message->actual_length += drv_data->len;
 	}
+
+	drv_data->transfer = NULL;
 
 	k1_spi_set_cs(message->spi, false);
 
@@ -563,7 +571,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		/* Disable all interrupts on error */
 		writel(0, drv_data->base + SSP_INT_EN);
 
-		drv_data->message->status = -EIO;
+		drv_data->transfer->error |= SPI_TRANS_FAIL_IO;
 		complete(&drv_data->completion);
 
 		return IRQ_HANDLED;
