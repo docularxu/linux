@@ -102,8 +102,7 @@ struct k1_spi_driver_data {
 	struct k1_spi_io rx;
 	struct k1_spi_io tx;
 
-	struct spi_message *message;	/* Current message */
-	struct spi_transfer *transfer;	/* Current transfer within message */
+	struct spi_transfer *transfer;	/* Current transfer */
 
 	/* Current transfer information; not valid if message is null */
 	unsigned int len;
@@ -459,8 +458,6 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	if (message->status == -EINPROGRESS)
 		message->status = ret;
 
-	drv_data->message = NULL;
-
 	spi_finalize_current_message(drv_data->host);
 
 	return 0;
@@ -470,8 +467,6 @@ static int k1_spi_prepare_message(struct spi_controller *host,
 				  struct spi_message *message)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-
-	drv_data->message = message;
 
 	k1_spi_flush(drv_data);
 
