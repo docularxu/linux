@@ -559,12 +559,12 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	bool tx_done;
 	u32 val;
 
+	if (!drv_data->transfer)
+		return IRQ_NONE;
+
 	/* Get status and clear pending interrupts */
 	val = readl(drv_data->base + SSP_STATUS);
 	writel(val, drv_data->base + SSP_STATUS);
-
-	if (!drv_data->message)
-		return IRQ_NONE;
 
 	/* Check for an RX overrun or TX underrun first */
 	if (val & (SSP_STATUS_TUR | SSP_STATUS_ROR)) {
