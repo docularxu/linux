@@ -105,7 +105,6 @@ struct k1_spi_driver_data {
 	struct spi_transfer *transfer;	/* Current transfer */
 
 	/* Current transfer information; not valid if message is null */
-	unsigned int len;
 	u32 bytes;			/* Bytes used for bits_per_word */
 	struct completion completion;	/* Transfer completion */
 };
@@ -354,7 +353,6 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	drv_data->rx.resid = transfer->len;
 	drv_data->tx.buf = (void *)transfer->tx_buf;
 	drv_data->tx.resid = transfer->len;
-	drv_data->len = transfer->len;
 
 	/* Bits per word can change on a per-transfer basis */
 	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
@@ -402,7 +400,7 @@ static int k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
 	unsigned long ms;
 
 	/* Length in bits to be transferred */
-	timeout = BITS_PER_BYTE * drv_data->bytes * drv_data->len;
+	timeout = BITS_PER_BYTE * drv_data->bytes * drv_data->transfer->len;
 	/* Time (usec) to transfer that many bits at the current bit rate */
 	timeout = DIV_ROUND_UP(timeout * MICROHZ_PER_HZ, drv_data->rate);
 	/* Convert that (+ 25%) to jiffies for the wait call */
@@ -448,7 +446,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 
 		spi_transfer_delay_exec(transfer);
 
-		message->actual_length += drv_data->len;
+		message->actual_length += transfer->len;
 	}
 
 	drv_data->transfer = NULL;
