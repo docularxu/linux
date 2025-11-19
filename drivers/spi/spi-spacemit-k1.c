@@ -370,6 +370,10 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 
 	drv_data->transfer = transfer;
 
+	/* Clear any existing interrupt conditions */
+	val = readl(drv_data->base + SSP_STATUS);
+	writel(val, drv_data->base + SSP_STATUS);
+
 	/* Set the data size,  and enable the hardware */
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
@@ -383,10 +387,6 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	 * things started.
 	 */
 	(void)k1_spi_write(drv_data);
-
-	/* Clear any existing interrupt conditions */
-	val = readl(drv_data->base + SSP_STATUS);
-	writel(val, drv_data->base + SSP_STATUS);
 
 	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
 	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
