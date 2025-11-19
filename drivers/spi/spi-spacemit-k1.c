@@ -417,11 +417,6 @@ static void k1_spi_transfer_end(struct k1_spi_driver_data *drv_data,
 				struct spi_transfer *transfer)
 {
 	struct spi_message *message = drv_data->message;
-	u32 val;
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val &= ~TOP_SSE;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
 
 	if (drv_data->rx.buf)
 		writel(0, drv_data->base + SSP_TIMEOUT);
@@ -602,8 +597,13 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		writel(val, drv_data->base + SSP_INT_EN);
 	}
 
-	if (rx_done && tx_done)
+	if (rx_done && tx_done) {
+		val = readl(drv_data->base + SSP_TOP_CTRL);
+		val &= ~TOP_SSE;
+		writel(val, drv_data->base + SSP_TOP_CTRL);
+
 		complete(&drv_data->completion);
+	}
 
 	return IRQ_HANDLED;
 }
