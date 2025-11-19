@@ -111,7 +111,6 @@ struct k1_spi_driver_data {
 
 	/* Current transfer information; not valid if message is null */
 	u32 bytes;			/* Bytes used for bits_per_word */
-	struct completion completion;	/* Transfer completion */
 };
 
 /* Discard any data in the RX FIFO */
@@ -491,7 +490,8 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 
 	host->setup = k1_spi_setup;
 	host->cleanup = k1_spi_cleanup;
-	host->transfer_one_message = k1_spi_transfer_one_message;
+	host->transfer_one = k1_spi_transfer_one;
+	host->set_cs = k1_spi_set_cs;
 	host->prepare_message = k1_spi_prepare_message;
 	host->unprepare_message = k1_spi_unprepare_message;
 
@@ -591,7 +591,7 @@ done:
 
 	drv_data->transfer = NULL;
 
-	k1_spi_finalize_current_transfer(drv_data->host);
+	spi_finalize_current_transfer(drv_data->host);
 
 	return IRQ_HANDLED;
 }
@@ -613,7 +613,6 @@ static int k1_spi_probe(struct platform_device *pdev)
 	drv_data->host = host;
 	platform_set_drvdata(pdev, drv_data);
 	drv_data->dev = dev;
-	init_completion(&drv_data->completion);
 
 	drv_data->base = devm_platform_get_and_ioremap_resource(pdev, 0,
 								&iores);
