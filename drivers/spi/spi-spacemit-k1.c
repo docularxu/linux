@@ -389,7 +389,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
 	writel(val, drv_data->base + SSP_INT_EN);
 
-	return ret;
+	return 1;	/* Assume we're not done */
 }
 
 static int k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data)
@@ -429,22 +429,20 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 		reinit_completion(completion);
 
 		/* Issue the next transfer */
-		if (k1_spi_transfer_one(host, message->spi, transfer)) {
-			message->status = -EIO;
-			break;
-		}
-
-		ret = k1_spi_transfer_wait(drv_data);
+		ret = k1_spi_transfer_one(host, message->spi, transfer);
 		if (ret < 0) {
-			message->status = ret;
-			break;
+			message->status = -EIO;
+		} else if (ret > 0) {
+			ret = k1_spi_transfer_wait(drv_data);
+			if (ret < 0)
+				message->status = ret;
 		}
-
-		spi_transfer_delay_exec(transfer);
 
 		/* If an error has occurred, we're done */
 		if (message->status)
 			break;
+
+		spi_transfer_delay_exec(transfer);
 
 		message->actual_length += drv_data->len;
 	}
