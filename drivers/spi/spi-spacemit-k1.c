@@ -442,19 +442,18 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 
 		spi_transfer_delay_exec(transfer);
 
-		if (!message->status)
-			message->actual_length += drv_data->len;
-
 		/* If an error has occurred, we're done */
 		if (message->status)
 			break;
+
+		message->actual_length += drv_data->len;
 	}
+
+	k1_spi_set_cs(message->spi, false);
 
 	drv_data->message = NULL;
 
 	spi_finalize_current_message(drv_data->host);
-
-	k1_spi_set_cs(message->spi, false);
 
 	return 0;
 }
