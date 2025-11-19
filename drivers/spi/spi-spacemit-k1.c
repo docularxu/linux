@@ -420,9 +420,6 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	struct spi_transfer *transfer;
 	int ret;
 
-	/* Message status starts out successful; set to -EIO on error */
-	message->status = 0;
-
 	k1_spi_set_cs(message->spi, true);
 
 	list_for_each_entry(transfer, &message->transfers, transfer_list) {
@@ -430,16 +427,17 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 
 		/* Issue the next transfer */
 		ret = k1_spi_transfer_one(host, message->spi, transfer);
-		if (ret < 0) {
-			message->status = -EIO;
-		} else if (ret > 0) {
+		if (ret < 0)
+			break;
+
+		if (ret > 0) {
 			ret = k1_spi_transfer_wait(drv_data);
 			if (ret < 0)
 				message->status = ret;
 		}
 
-		/* If an error has occurred, we're done */
-		if (message->status)
+		/* If the message status has changed, we're done */
+		if (message->status != -EINPROGRESS)
 			break;
 
 		spi_transfer_delay_exec(transfer);
@@ -448,6 +446,9 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	}
 
 	k1_spi_set_cs(message->spi, false);
+
+	if (message->status == -EINPROGRESS)
+		message->status = ret;
 
 	drv_data->message = NULL;
 
