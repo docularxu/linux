@@ -457,8 +457,6 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 		message->actual_length += transfer->len;
 	}
 
-	drv_data->transfer = NULL;
-
 	k1_spi_set_cs(message->spi, false);
 
 	if (message->status == -EINPROGRESS)
@@ -575,6 +573,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		writel(0, drv_data->base + SSP_INT_EN);
 
 		drv_data->transfer->error |= SPI_TRANS_FAIL_IO;
+		drv_data->transfer = NULL;
 		k1_spi_finalize_current_transfer(host);
 
 		return IRQ_HANDLED;
@@ -608,6 +607,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		val &= ~TOP_SSE;
 		writel(val, drv_data->base + SSP_TOP_CTRL);
 
+		drv_data->transfer = NULL;
 		k1_spi_finalize_current_transfer(host);
 	}
 
