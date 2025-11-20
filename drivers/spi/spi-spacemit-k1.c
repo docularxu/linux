@@ -270,9 +270,6 @@ static bool k1_spi_read(struct k1_spi_driver_data *drv_data)
 	unsigned int count;
 	u32 val;
 
-	if (!rx->resid)
-		return true;			/* Nothing more to receive */
-
 	val = readl(drv_data->base + SSP_STATUS);
 
 	/* Nothing to do if the FIFO is empty */
@@ -557,6 +554,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
 	struct k1_spi_driver_data *drv_data = dev_id;
 	struct spi_controller *host = drv_data->host;
+	struct k1_spi_io *rx = &drv_data->rx;
 	bool rx_done;
 	bool tx_done;
 	u32 val;
@@ -580,12 +578,16 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	rx_done = k1_spi_read(drv_data);
-	tx_done = k1_spi_write(drv_data);
+	if (rx->resid) {
+		/* Read more, and disable the timeout if we're done */
+		rx_done = k1_spi_read(drv_data);
+		if (rx_done && rx->buf)
+			writel(0, drv_data->base + SSP_TIMEOUT);
+	} else {
+		rx_done = true;
+	}
 
-	/* If we're done with receiving, disable the timeout */
-	if (rx_done && drv_data->rx.buf)
-		writel(0, drv_data->base + SSP_TIMEOUT);
+	tx_done = k1_spi_write(drv_data);
 
 	/* Disable interrupts if we're done transferring either direction */
 	if (rx_done || tx_done) {
