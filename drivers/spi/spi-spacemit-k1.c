@@ -577,7 +577,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	if (tx->resid) {
 		k1_spi_write(drv_data);
 
-		/* If we're done writing disable TX interrupts */
+		/* If we're done writing, disable TX interrupts */
 		if (!tx->resid) {
 			val = SSP_INT_EN_RX | SSP_INT_EN_ERROR;
 			writel(val, drv_data->base + SSP_INT_EN);
@@ -588,23 +588,25 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	if (rx->resid)
 		k1_spi_read(drv_data);
 
+	/* If there's still more, we'll continue at the next interrupt */
+	if (rx->resid)
+		return IRQ_HANDLED;
+
 	/* For SPI, RX always follows TX, so if RX is done, we're done */
-	if (!rx->resid) {
-		/* We're done; disable all interrupts */
 
-		if (rx->resid && rx->buf)
-			writel(0, drv_data->base + SSP_TIMEOUT);
+	writel(0, drv_data->base + SSP_INT_EN);
 
-		writel(0, drv_data->base + SSP_INT_EN);
+	/* If "real" data was being read, turn off the timeout */
+	if (rx->resid && rx->buf)
+		writel(0, drv_data->base + SSP_TIMEOUT);
 
-		/* Disable the port */
-		val = readl(drv_data->base + SSP_TOP_CTRL);
-		val &= ~TOP_SSE;
-		writel(val, drv_data->base + SSP_TOP_CTRL);
+	/* Disable the port */
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	val &= ~TOP_SSE;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
 
-		drv_data->transfer = NULL;
-		k1_spi_finalize_current_transfer(host);
-	}
+	drv_data->transfer = NULL;
+	k1_spi_finalize_current_transfer(host);
 
 	return IRQ_HANDLED;
 }
