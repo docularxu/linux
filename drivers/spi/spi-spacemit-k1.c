@@ -61,6 +61,9 @@
 #define SSP_INT_EN_TIE			BIT(3)		/* TX FIFO */
 #define SSP_INT_EN_RIM			BIT(4)		/* RX FIFO overrun */
 #define SSP_INT_EN_TIM			BIT(5)		/* TX FIFO underrun */
+#define SSP_INT_EN_EBCEI		BIT(6)		/* Bit count error */
+#define SSP_INT_EN_ERROR \
+		(SSP_INT_EN_RIM | SSP_INT_EN_TIM | SSP_INT_EN_EBCEI)
 
 /* SSP Time Out Register */
 #define SSP_TIMEOUT		0x0c
@@ -78,6 +81,9 @@
 #define SSP_STATUS_RNE			BIT(14)		/* RX FIFO not empty */
 #define SSP_STATUS_RFL			GENMASK(19, 15)	/* RX FIFO level */
 #define SSP_STATUS_ROR			BIT(20)		/* RX FIFO overrun */
+#define SSP_STATUS_BCE			BIT(21)		/* Bit count error */
+#define SSP_STATUS_ERROR \
+		(SSP_STATUS_TUR | SSP_STATUS_ROR |SSP_STATUS_BCE)
 
 /* The FIFO sizes and thresholds are the same for RX and TX */
 #define K1_SPI_FIFO_SIZE	32
@@ -381,7 +387,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	if (drv_data->tx.buf)
 		(void)k1_spi_write(drv_data);
 
-	val = SSP_INT_EN_RIM | SSP_INT_EN_TIM;
+	val = SSP_INT_EN_ERROR;
 	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
 	writel(val, drv_data->base + SSP_INT_EN);
 
@@ -563,7 +569,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	writel(val, drv_data->base + SSP_STATUS);
 
 	/* Check for an RX overrun or TX underrun first */
-	if (val & (SSP_STATUS_TUR | SSP_STATUS_ROR)) {
+	if (val & SSP_STATUS_ERROR) {
 		/* Disable all interrupts on error */
 		writel(0, drv_data->base + SSP_INT_EN);
 
