@@ -573,10 +573,6 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	/* Read more if there's more to read */
-	if (rx->resid)
-		k1_spi_read(drv_data);
-
 	/* Write more if there's more to write */
 	if (tx->resid) {
 		k1_spi_write(drv_data);
@@ -587,6 +583,10 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 			writel(val, drv_data->base + SSP_INT_EN);
 		}
 	}
+
+	/* Read more if there's more to read */
+	if (rx->resid)
+		k1_spi_read(drv_data);
 
 	/* For SPI, RX always follows TX, so if RX is done, we're done */
 	if (!rx->resid) {
