@@ -264,7 +264,7 @@ static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
 	rx->buf += bytes;
 }
 
-static bool k1_spi_read(struct k1_spi_driver_data *drv_data)
+static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 {
 	struct k1_spi_io *rx = &drv_data->rx;
 	unsigned int count;
@@ -274,15 +274,13 @@ static bool k1_spi_read(struct k1_spi_driver_data *drv_data)
 
 	/* Nothing to do if the FIFO is empty */
 	if (!(val & SSP_STATUS_RNE))
-		return false;
+		return;
 
 	/* The number of open slots is one more than what's in the field */
 	count = min(FIELD_GET(SSP_STATUS_RFL, val), rx->resid);
 	do
 		k1_spi_read_word(drv_data);
 	while (count--);
-
-	return !rx->resid;
 }
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
@@ -553,7 +551,6 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	struct spi_controller *host = drv_data->host;
 	struct k1_spi_io *tx = &drv_data->tx;
 	struct k1_spi_io *rx = &drv_data->rx;
-	bool rx_done;
 	bool tx_done;
 	u32 val;
 
@@ -578,11 +575,9 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 
 	if (rx->resid) {
 		/* Read more, and disable the timeout if we're done */
-		rx_done = k1_spi_read(drv_data);
-		if (rx_done && rx->buf)
+		k1_spi_read(drv_data);
+		if (!rx->resid && rx->buf)
 			writel(0, drv_data->base + SSP_TIMEOUT);
-	} else {
-		rx_done = true;
 	}
 
 	if (tx->resid)
@@ -591,13 +586,13 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		tx_done = true;
 
 	/* Disable interrupts if we're done transferring either direction */
-	if (rx_done || tx_done) {
+	if (!rx->resid || tx_done) {
 		/* If both are done, disable all interrupts */
-		if (rx_done && tx_done) {
+		if (!rx->resid && tx_done) {
 			val = 0;
 		} else {
 			val = readl(drv_data->base + SSP_INT_EN);
-			if (rx_done)
+			if (!rx->resid)
 				val &= ~(SSP_INT_EN_TINTE | SSP_INT_EN_RIE);
 			if (tx_done)
 				val &= ~SSP_INT_EN_TIE;
@@ -605,7 +600,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		writel(val, drv_data->base + SSP_INT_EN);
 	}
 
-	if (rx_done && tx_done) {
+	if (!rx->resid && tx_done) {
 		val = readl(drv_data->base + SSP_TOP_CTRL);
 		val &= ~TOP_SSE;
 		writel(val, drv_data->base + SSP_TOP_CTRL);
