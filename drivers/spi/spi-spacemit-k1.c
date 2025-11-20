@@ -276,9 +276,10 @@ static bool k1_spi_read(struct k1_spi_driver_data *drv_data)
 		return false;
 
 	/* The number of open slots is one more than what's in the field */
-	count = min(FIELD_GET(SSP_STATUS_RFL, val) + 1, rx->resid);
-	while (count--)
+	count = min(FIELD_GET(SSP_STATUS_RFL, val), rx->resid);
+	do
 		k1_spi_read_word(drv_data);
+	while (count--);
 
 	return !rx->resid;
 }
@@ -329,8 +330,9 @@ static bool k1_spi_write(struct k1_spi_driver_data *drv_data)
 	 * chance the other side can overrun our RX FIFO.
 	 */
 	count = min3(count, K1_SPI_THRESH, tx->resid);
-	while (count--)
+	do
 		k1_spi_write_word(drv_data);
+	while (--count);
 
 	return !tx->resid;
 }
