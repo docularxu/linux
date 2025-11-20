@@ -549,31 +549,29 @@ k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
 	struct k1_spi_driver_data *drv_data = dev_id;
-	struct spi_controller *host = drv_data->host;
 	struct k1_spi_io *tx = &drv_data->tx;
 	struct k1_spi_io *rx = &drv_data->rx;
 	u32 val;
 
+	/* Return immediately if we're not expecting any interrupts */
 	if (!drv_data->transfer)
 		return IRQ_NONE;
 
-	/* Get status and clear pending interrupts */
+	/* Get status and clear pending interrupts; all are handled below */
 	val = readl(drv_data->base + SSP_STATUS);
 	writel(val, drv_data->base + SSP_STATUS);
 
-	/* Check for an RX overrun or TX underrun first */
+	/* Check for any error conditions first */
 	if (val & SSP_STATUS_ERROR) {
-		/* Disable all interrupts on error */
-		writel(0, drv_data->base + SSP_INT_EN);
-
 		drv_data->transfer->error |= SPI_TRANS_FAIL_IO;
-		drv_data->transfer = NULL;
-		k1_spi_finalize_current_transfer(host);
-
-		return IRQ_HANDLED;
+		goto done;
 	}
 
-	/* Write more if there's more to write */
+	/*
+	 * For SPI, bytes are transferred in both directions equally, and
+	 * RX always follows TX.  Start by writing if there is anything to
+	 * write, then read.  Once there's no more to read, we're done.
+	 */
 	if (tx->resid) {
 		k1_spi_write(drv_data);
 
@@ -584,29 +582,31 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		}
 	}
 
-	/* Read more if there's more to read */
-	if (rx->resid)
+	/*
+	 * Read more if there's more to read, and if we didn't get it all
+	 * we'll continue at the next interrupt.
+	 */
+	if (rx->resid) {
 		k1_spi_read(drv_data);
-
-	/* If there's still more, we'll continue at the next interrupt */
-	if (rx->resid)
-		return IRQ_HANDLED;
-
-	/* For SPI, RX always follows TX, so if RX is done, we're done */
-
+		if (rx->resid)
+			return IRQ_HANDLED;
+	}
+done:
+	/* Disable all interrupts */
 	writel(0, drv_data->base + SSP_INT_EN);
-
-	/* If "real" data was being read, turn off the timeout */
-	if (rx->resid && rx->buf)
-		writel(0, drv_data->base + SSP_TIMEOUT);
 
 	/* Disable the port */
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val &= ~TOP_SSE;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
+	/* If "real" data was being read, turn off the timeout */
+	if (rx->resid && rx->buf)
+		writel(0, drv_data->base + SSP_TIMEOUT);
+
 	drv_data->transfer = NULL;
-	k1_spi_finalize_current_transfer(host);
+
+	k1_spi_finalize_current_transfer(drv_data->host);
 
 	return IRQ_HANDLED;
 }
