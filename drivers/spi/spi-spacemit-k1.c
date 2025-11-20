@@ -417,6 +417,13 @@ static int k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data,
 	return 0;
 }
 
+static void k1_spi_finalize_current_transfer(struct spi_controller *host)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+
+	complete(&drv_data->completion);
+}
+
 static int k1_spi_transfer_one_message(struct spi_controller *host,
 					   struct spi_message *message)
 {
@@ -550,6 +557,7 @@ k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
 	struct k1_spi_driver_data *drv_data = dev_id;
+	struct spi_controller *host = drv_data->host;
 	bool rx_done;
 	bool tx_done;
 	u32 val;
@@ -567,7 +575,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		writel(0, drv_data->base + SSP_INT_EN);
 
 		drv_data->transfer->error |= SPI_TRANS_FAIL_IO;
-		complete(&drv_data->completion);
+		k1_spi_finalize_current_transfer(host);
 
 		return IRQ_HANDLED;
 	}
@@ -600,7 +608,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		val &= ~TOP_SSE;
 		writel(val, drv_data->base + SSP_TOP_CTRL);
 
-		complete(&drv_data->completion);
+		k1_spi_finalize_current_transfer(host);
 	}
 
 	return IRQ_HANDLED;
