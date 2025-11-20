@@ -62,6 +62,10 @@
 #define SSP_INT_EN_RIM			BIT(4)		/* RX FIFO overrun */
 #define SSP_INT_EN_TIM			BIT(5)		/* TX FIFO underrun */
 #define SSP_INT_EN_EBCEI		BIT(6)		/* Bit count error */
+
+#define SSP_INT_EN_TX	SSP_INT_EN_TIE
+#define SSP_INT_EN_RX \
+		(SSP_INT_EN_TINTE | SSP_INT_EN_RIE)
 #define SSP_INT_EN_ERROR \
 		(SSP_INT_EN_RIM | SSP_INT_EN_TIM | SSP_INT_EN_EBCEI)
 
@@ -377,8 +381,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	if (drv_data->tx.buf)
 		k1_spi_write(drv_data);
 
-	val = SSP_INT_EN_ERROR;
-	val |= SSP_INT_EN_TINTE | SSP_INT_EN_RIE | SSP_INT_EN_TIE;
+	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
 	writel(val, drv_data->base + SSP_INT_EN);
 
 	return 1;	/* Assume we're not done */
@@ -588,9 +591,9 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		} else {
 			val = readl(drv_data->base + SSP_INT_EN);
 			if (!rx->resid)
-				val &= ~(SSP_INT_EN_TINTE | SSP_INT_EN_RIE);
+				val &= ~SSP_INT_EN_RX;
 			if (!tx->resid)
-				val &= ~SSP_INT_EN_TIE;
+				val &= ~SSP_INT_EN_TX
 		}
 		writel(val, drv_data->base + SSP_INT_EN);
 	}
