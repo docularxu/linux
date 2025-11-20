@@ -63,7 +63,7 @@
 #define SSP_INT_EN_TIM			BIT(5)		/* TX FIFO underrun */
 #define SSP_INT_EN_EBCEI		BIT(6)		/* Bit count error */
 
-#define SSP_INT_EN_TX	SSP_INT_EN_TIE
+#define SSP_INT_EN_TX		SSP_INT_EN_TIE
 #define SSP_INT_EN_RX \
 		(SSP_INT_EN_TINTE | SSP_INT_EN_RIE)
 #define SSP_INT_EN_ERROR \
@@ -340,6 +340,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 		    struct spi_transfer *transfer)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 ctrl;
 	u32 val;
 	int ret;
 
@@ -362,19 +363,21 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 
 	drv_data->transfer = transfer;
 
-	/* Clear any existing interrupt conditions */
-	val = readl(drv_data->base + SSP_STATUS);
-	writel(val, drv_data->base + SSP_STATUS);
+	/* Set the data (word) size */
+	ctrl = readl(drv_data->base + SSP_TOP_CTRL);
+	ctrl |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
+	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
-	/* Set the data size,  and enable the hardware */
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
-	val |= TOP_SSE;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
+	/* Clear any existing interrupt conditions */
+	writel(~0, drv_data->base + SSP_STATUS);
 
 	/* An interrupt will initiate the transfer */
 	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
 	writel(val, drv_data->base + SSP_INT_EN);
+
+	/* Enable the port */
+	ctrl |= TOP_SSE;
+	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
 	return 1;	/* Assume we're not done */
 }
@@ -534,8 +537,7 @@ k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
 	writel(0, drv_data->base + SSP_TIMEOUT);
 
 	/* Clear any pending interrupt conditions */
-	val = readl(drv_data->base + SSP_STATUS);
-	writel(val, drv_data->base + SSP_STATUS);
+	writel(~0, drv_data->base + SSP_STATUS);
 }
 
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
@@ -584,19 +586,19 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 			return IRQ_HANDLED;
 	}
 done:
-	/* Disable all interrupts */
-	writel(0, drv_data->base + SSP_INT_EN);
-
 	/* Disable the port */
 	val = readl(drv_data->base + SSP_TOP_CTRL);
 	val &= ~TOP_SSE;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
+	/* Disable all interrupts */
+	writel(0, drv_data->base + SSP_INT_EN);
+
+	drv_data->transfer = NULL;
+
 	/* If "real" data was being read, turn off the timeout */
 	if (rx->resid && rx->buf)
 		writel(0, drv_data->base + SSP_TIMEOUT);
-
-	drv_data->transfer = NULL;
 
 	k1_spi_finalize_current_transfer(drv_data->host);
 
