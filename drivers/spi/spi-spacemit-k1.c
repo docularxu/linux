@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0
-
-/*
- * SpacemiT K1 SPI controller driver
- *
- * Copyright (C) 2025 by RISCstar Solutions Corporation.  All rights reserved.
- * Copyright (c) 2023, spacemit Corporation.
- */
+//
+// SpacemiT K1 SPI controller driver
+//
+// Copyright (C) 2025 by RISCstar Solutions Corporation.  All rights reserved.
+// Copyright (c) 2023, spacemit Corporation.
 
 #include <linux/bitfield.h>
 #include <linux/clk.h>
