@@ -267,20 +267,16 @@ static bool k1_spi_read(struct k1_spi_driver_data *drv_data)
 	u32 val;
 
 	if (!rx->resid)
-		return true;	/* Nothing more to receive */
+		return true;			/* Nothing more to receive */
 
-	/* We'll read as many slots in the FIFO as there are available */
 	val = readl(drv_data->base + SSP_STATUS);
+
+	/* Nothing to do if the FIFO is empty */
+	if (!(val & SSP_STATUS_RNE))
+		return false;
+
 	/* The number of open slots is one more than what's in the field */
-	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
-
-	/* A full FIFO count means the FIFO is either full or empty */
-
-	if (count == K1_SPI_FIFO_SIZE)
-		if (!(val & SSP_STATUS_RNE))
-			return false;	/* Nothing available to read */
-
-	count = min(count, rx->resid);
+	count = min(FIELD_GET(SSP_STATUS_RFL, val) + 1, rx->resid);
 	while (count--)
 		k1_spi_read_word(drv_data);
 
@@ -315,19 +311,18 @@ static bool k1_spi_write(struct k1_spi_driver_data *drv_data)
 	u32 val;
 
 	if (!tx->resid)
-		return true;	/* Nothing more to send */
+		return true;			/* Nothing more to send */
 
-	/* See how many slots in the TX FIFO are available */
 	val = readl(drv_data->base + SSP_STATUS);
-	count = FIELD_GET(SSP_STATUS_TFL, val);
 
-	/* A zero count means the FIFO is either full or empty */
-	if (!count) {
-		if (val & SSP_STATUS_TNF)
-			count = K1_SPI_FIFO_SIZE;
-		else
-			return false;	/* No room in the FIFO */
-	}
+	/* Nothing to do if there's no room in the FIFO */
+	if (!(val & SSP_STATUS_TNF))
+		return false;
+
+	/* Get the number of available slots in the TX FIFO */
+	count = FIELD_GET(SSP_STATUS_TFL, val);
+	if (!count)
+		count = K1_SPI_FIFO_SIZE;	/* All entries available */
 
 	/*
 	 * Limit how much we try to send at a time, to reduce the
@@ -579,7 +574,6 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	/* Drain the RX FIFO first, then transmit what we can */
 	rx_done = k1_spi_read(drv_data);
 	tx_done = k1_spi_write(drv_data);
 
