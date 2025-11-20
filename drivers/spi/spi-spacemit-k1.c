@@ -312,9 +312,6 @@ static bool k1_spi_write(struct k1_spi_driver_data *drv_data)
 	unsigned int count;
 	u32 val;
 
-	if (!tx->resid)
-		return true;			/* Nothing more to send */
-
 	val = readl(drv_data->base + SSP_STATUS);
 
 	/* Nothing to do if there's no room in the FIFO */
@@ -554,6 +551,7 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
 	struct k1_spi_driver_data *drv_data = dev_id;
 	struct spi_controller *host = drv_data->host;
+	struct k1_spi_io *tx = &drv_data->tx;
 	struct k1_spi_io *rx = &drv_data->rx;
 	bool rx_done;
 	bool tx_done;
@@ -587,7 +585,10 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 		rx_done = true;
 	}
 
-	tx_done = k1_spi_write(drv_data);
+	if (tx->resid)
+		tx_done = k1_spi_write(drv_data);
+	else
+		tx_done = true;
 
 	/* Disable interrupts if we're done transferring either direction */
 	if (rx_done || tx_done) {
