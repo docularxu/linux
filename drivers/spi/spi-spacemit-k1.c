@@ -372,15 +372,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	val |= TOP_SSE;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 
-	/*
-	 * For PIO transfers, interrupts will cause words to get
-	 * transferred.  The interrupts will get disabled as the
-	 * transfer completes.  We'll write what we can to get
-	 * things started.
-	 */
-	if (drv_data->tx.buf)
-		k1_spi_write(drv_data);
-
+	/* An interrupt will initiate the transfer */
 	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
 	writel(val, drv_data->base + SSP_INT_EN);
 
