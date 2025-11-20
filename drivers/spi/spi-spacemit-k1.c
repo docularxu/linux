@@ -580,8 +580,14 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 			writel(0, drv_data->base + SSP_TIMEOUT);
 	}
 
-	if (tx->resid)
+	if (tx->resid) {
+		/* Write more, and disable TX interrupts if we're done */
 		k1_spi_write(drv_data);
+		if (!tx->resid) {
+			val = SSP_INT_EN_RX | SSP_INT_EN_ERROR;
+			writel(val, drv_data->base + SSP_INT_EN);
+		}
+	}
 
 	/* Disable interrupts if we're done transferring either direction */
 	if (!rx->resid || !tx->resid) {
@@ -592,8 +598,6 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 			val = readl(drv_data->base + SSP_INT_EN);
 			if (!rx->resid)
 				val &= ~SSP_INT_EN_RX;
-			if (!tx->resid)
-				val &= ~SSP_INT_EN_TX
 		}
 		writel(val, drv_data->base + SSP_INT_EN);
 	}
