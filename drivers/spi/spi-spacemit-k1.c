@@ -334,15 +334,10 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 			       struct spi_transfer *transfer)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 count;
 	u32 ctrl;
 	u32 val;
 	int ret;
-
-	/* Record the current transfer information */
-	drv_data->rx_buf = transfer->rx_buf;
-	drv_data->rx_resid = transfer->len;
-	drv_data->tx_buf = transfer->tx_buf;
-	drv_data->tx_resid = transfer->len;
 
 	/* Bits per word can change on a per-transfer basis */
 	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
@@ -354,6 +349,15 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 			"failed to set transfer speed: %d\n", ret);
 		return ret;
 	}
+
+	/* Determine how many words the len bytes represent */
+	count = transfer->len / drv_data->bytes;
+
+	/* Record the current transfer information */
+	drv_data->rx_buf = transfer->rx_buf;
+	drv_data->rx_resid = count;
+	drv_data->tx_buf = transfer->tx_buf;
+	drv_data->tx_resid = count;
 
 	drv_data->transfer = transfer;
 
