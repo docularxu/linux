@@ -593,10 +593,6 @@ done:
 
 	drv_data->transfer = NULL;
 
-	/* If "real" data was being read, turn off the timeout */
-	if (drv_data->rx_resid && drv_data->rx_buf)
-		writel(0, drv_data->base + SSP_TIMEOUT);
-
 	k1_spi_finalize_current_transfer(drv_data->host);
 
 	return IRQ_HANDLED;
