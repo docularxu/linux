@@ -267,22 +267,22 @@ static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
 
 static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 {
-	unsigned int count;
-	u32 val;
+	do {
+		u32 val = readl(drv_data->base + SSP_STATUS);
+		unsigned int count;
 
-	val = readl(drv_data->base + SSP_STATUS);
+		/* Nothing to do if the FIFO is empty */
+		if (!(val & SSP_STATUS_RNE))
+			return;
 
-	/* Nothing to do if the FIFO is empty */
-	if (!(val & SSP_STATUS_RNE))
-		return;
-
-	/* Get the number of filled FIFO entries */
-	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
-	/* Only read what we need */
-	count = min(count, drv_data->rx_resid);
-	do
-		k1_spi_read_word(drv_data);
-	while (--count);
+		/* Get the number of filled FIFO entries */
+		count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
+		/* Only read what we need */
+		count = min(count, drv_data->rx_resid);
+		do
+			k1_spi_read_word(drv_data);
+		while (--count);
+	} while (drv_data->rx_resid);
 }
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
@@ -316,10 +316,8 @@ static void k1_spi_write(struct k1_spi_driver_data *drv_data)
 	if (!(val & SSP_STATUS_TNF))
 		return;
 
-	/* Get the number of open entries in the TX FIFO */
-	count = FIELD_GET(SSP_STATUS_TFL, val);
-	if (!count)
-		count = K1_SPI_FIFO_SIZE;	/* All entries available */
+	/* Get the number of open slots in the FIFO; zero means all */
+	count = FIELD_GET(SSP_STATUS_TFL, val) ? : K1_SPI_FIFO_SIZE;
 
 	/*
 	 * Limit how much we try to send at a time, to reduce the
