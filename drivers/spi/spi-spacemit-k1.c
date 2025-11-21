@@ -362,11 +362,6 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 
 	drv_data->transfer = transfer;
 
-	/* Set the data (word) size */
-	ctrl = readl(drv_data->base + SSP_TOP_CTRL);
-	ctrl |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
-	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
-
 	/* Clear any existing interrupt conditions */
 	writel(~0, drv_data->base + SSP_STATUS);
 
@@ -374,7 +369,10 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
 	writel(val, drv_data->base + SSP_INT_EN);
 
-	/* Enable the port */
+	/* Set the data (word) size, and enable the port */
+	ctrl = readl(drv_data->base + SSP_TOP_CTRL);
+	ctrl &= ~TOP_DSS_MASK;
+	ctrl |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
 	ctrl |= TOP_SSE;
 	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
