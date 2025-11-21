@@ -93,11 +93,6 @@
 #define K1_SPI_FIFO_SIZE	32
 #define K1_SPI_THRESH		(K1_SPI_FIFO_SIZE / 2)
 
-struct k1_spi_io {
-	void *buf;
-	unsigned int resid;
-};
-
 struct k1_spi_driver_data {
 	struct spi_controller *host;
 	struct device *dev;
@@ -107,8 +102,10 @@ struct k1_spi_driver_data {
 	unsigned long rate;
 	int irq;
 
-	struct k1_spi_io rx;
-	struct k1_spi_io tx;
+	void *rx_buf;
+	unsigned int rx_resid;
+	const void *tx_buf;
+	unsigned int tx_resid;
 
 	struct spi_transfer *transfer;	/* Current transfer */
 
@@ -151,7 +148,7 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	drv_data->rate = clk_get_rate(clk);
 
 	/* No need for RX FIFO timeout if we're not receiving anything */
-	if (!drv_data->rx.buf)
+	if (!drv_data->rx_buf)
 		return 0;
 
 	/*
@@ -248,29 +245,27 @@ static void k1_spi_cleanup(struct spi_device *spi)
 
 static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
 {
-	struct k1_spi_io *rx = &drv_data->rx;
 	u32 bytes = drv_data->bytes;
 	u32 val;
 
 	val = readl(drv_data->base + SSP_DATAR);
-	rx->resid -= bytes;
+	drv_data->rx_resid -= bytes;
 
-	if (!rx->buf)
+	if (!drv_data->rx_buf)
 		return;	/* Null reader: discard the data */
 
 	if (bytes == 1)
-		*(u8 *)rx->buf = val;
+		*(u8 *)drv_data->rx_buf = val;
 	else if (bytes == 2)
-		*(u16 *)rx->buf = val;
+		*(u16 *)drv_data->rx_buf = val;
 	else	/* bytes == 4 */
-		*(u32 *)rx->buf = val;
+		*(u32 *)drv_data->rx_buf = val;
 
-	rx->buf += bytes;
+	drv_data->rx_buf += bytes;
 }
 
 static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 {
-	struct k1_spi_io *rx = &drv_data->rx;
 	unsigned int count;
 	u32 val;
 
@@ -281,7 +276,7 @@ static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 		return;
 
 	/* The number of open slots is one more than what's in the field */
-	count = min(FIELD_GET(SSP_STATUS_RFL, val), rx->resid);
+	count = min(FIELD_GET(SSP_STATUS_RFL, val), drv_data->rx_resid);
 	do
 		k1_spi_read_word(drv_data);
 	while (count--);
@@ -289,28 +284,26 @@ static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
 {
-	struct k1_spi_io *tx = &drv_data->tx;
 	u32 val = 0;
 	u32 bytes;
 
 	bytes = drv_data->bytes;
-	if (tx->buf) {
+	if (drv_data->tx_buf) {
 		if (bytes == 1)
-			val = *(u8 *)tx->buf;
+			val = *(u8 *)drv_data->tx_buf;
 		else if (bytes == 2)
-			val = *(u16 *)tx->buf;
+			val = *(u16 *)drv_data->tx_buf;
 		else	/* bytes == 4 */
-			val = *(u32 *)tx->buf;
-		tx->buf += bytes;
+			val = *(u32 *)drv_data->tx_buf;
+		drv_data->tx_buf += bytes;
 	} /* Otherwise null writer; write 1, 2, or 4 zero bytes */
 
-	tx->resid -= bytes;
+	drv_data->tx_resid -= bytes;
 	writel(val, drv_data->base + SSP_DATAR);
 }
 
 static void k1_spi_write(struct k1_spi_driver_data *drv_data)
 {
-	struct k1_spi_io *tx = &drv_data->tx;
 	unsigned int count;
 	u32 val;
 
@@ -329,7 +322,7 @@ static void k1_spi_write(struct k1_spi_driver_data *drv_data)
 	 * Limit how much we try to send at a time, to reduce the
 	 * chance the other side can overrun our RX FIFO.
 	 */
-	count = min3(count, K1_SPI_THRESH, tx->resid);
+	count = min3(count, K1_SPI_THRESH, drv_data->tx_resid);
 	do
 		k1_spi_write_word(drv_data);
 	while (--count);
@@ -345,10 +338,10 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	int ret;
 
 	/* Record the current transfer information */
-	drv_data->rx.buf = transfer->rx_buf;
-	drv_data->rx.resid = transfer->len;
-	drv_data->tx.buf = (void *)transfer->tx_buf;
-	drv_data->tx.resid = transfer->len;
+	drv_data->rx_buf = transfer->rx_buf;
+	drv_data->rx_resid = transfer->len;
+	drv_data->tx_buf = transfer->tx_buf;
+	drv_data->tx_resid = transfer->len;
 
 	/* Bits per word can change on a per-transfer basis */
 	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
@@ -543,8 +536,6 @@ k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
 	struct k1_spi_driver_data *drv_data = dev_id;
-	struct k1_spi_io *tx = &drv_data->tx;
-	struct k1_spi_io *rx = &drv_data->rx;
 	u32 val;
 
 	/* Return immediately if we're not expecting any interrupts */
@@ -566,11 +557,11 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	 * RX always follows TX.  Start by writing if there is anything to
 	 * write, then read.  Once there's no more to read, we're done.
 	 */
-	if (tx->resid) {
+	if (drv_data->tx_resid) {
 		k1_spi_write(drv_data);
 
 		/* If we're done writing, disable TX interrupts */
-		if (!tx->resid) {
+		if (!drv_data->tx_resid) {
 			val = SSP_INT_EN_RX | SSP_INT_EN_ERROR;
 			writel(val, drv_data->base + SSP_INT_EN);
 		}
@@ -580,9 +571,9 @@ static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 	 * Read more if there's more to read, and if we didn't get it all
 	 * we'll continue at the next interrupt.
 	 */
-	if (rx->resid) {
+	if (drv_data->rx_resid) {
 		k1_spi_read(drv_data);
-		if (rx->resid)
+		if (drv_data->rx_resid)
 			return IRQ_HANDLED;
 	}
 done:
@@ -597,7 +588,7 @@ done:
 	drv_data->transfer = NULL;
 
 	/* If "real" data was being read, turn off the timeout */
-	if (rx->resid && rx->buf)
+	if (drv_data->rx_resid && drv_data->rx_buf)
 		writel(0, drv_data->base + SSP_TIMEOUT);
 
 	k1_spi_finalize_current_transfer(drv_data->host);
