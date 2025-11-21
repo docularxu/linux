@@ -132,7 +132,8 @@ static void k1_spi_flush(struct k1_spi_driver_data *drv_data)
 }
 
 /* Set the transfer speed; the SPI core code ensures it is supported */
-static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
+static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data,
+			    struct spi_transfer *transfer)
 {
 	struct clk *clk = drv_data->clk;
 	u64 nsec_per_word;
@@ -141,14 +142,14 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data, u32 rate)
 	u32 val;
 	int ret;
 
-	ret = clk_set_rate(clk, rate);
+	ret = clk_set_rate(clk, transfer->speed_hz);
 	if (ret)
 		return ret;
 
 	drv_data->rate = clk_get_rate(clk);
 
 	/* No need for RX FIFO timeout if we're not receiving anything */
-	if (!drv_data->rx_buf)
+	if (!transfer->rx_buf)
 		return 0;
 
 	/*
@@ -328,9 +329,9 @@ static void k1_spi_write(struct k1_spi_driver_data *drv_data)
 	while (--count);
 }
 
-static int
-k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
-		    struct spi_transfer *transfer)
+static int k1_spi_transfer_one(struct spi_controller *host,
+			       struct spi_device *spi,
+			       struct spi_transfer *transfer)
 {
 	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
 	u32 ctrl;
@@ -347,7 +348,7 @@ k1_spi_transfer_one(struct spi_controller *host, struct spi_device *spi,
 	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
 
 	/* Each transfer can also specify a different rate */
-	ret = k1_spi_set_speed(drv_data, transfer->speed_hz);
+	ret = k1_spi_set_speed(drv_data, transfer);
 	if (ret) {
 		dev_err(drv_data->dev,
 			"failed to set transfer speed: %d\n", ret);
