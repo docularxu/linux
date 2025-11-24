@@ -378,80 +378,6 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	return 1;	/* Assume we're not done */
 }
 
-static int k1_spi_transfer_wait(struct k1_spi_driver_data *drv_data,
-				struct spi_transfer *transfer)
-{
-	struct completion *completion = &drv_data->completion;
-	unsigned long timeout;
-	unsigned long ms;
-
-	/* Length in bits to be transferred */
-	timeout = BITS_PER_BYTE * drv_data->bytes * transfer->len;
-	/* Time (usec) to transfer that many bits at the current bit rate */
-	timeout = DIV_ROUND_UP(timeout * MICROHZ_PER_HZ, drv_data->rate);
-	/* Convert that (+ 25%) to jiffies for the wait call */
-	timeout = usecs_to_jiffies(5 * timeout / 4);
-
-	ms = wait_for_completion_interruptible_timeout(completion, timeout);
-	if (!ms)
-		return -ETIMEDOUT;
-
-	if (transfer->error & SPI_TRANS_FAIL_IO)
-		return -EIO;
-
-	return 0;
-}
-
-static void k1_spi_finalize_current_transfer(struct spi_controller *host)
-{
-	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-
-	complete(&drv_data->completion);
-}
-
-static int k1_spi_transfer_one_message(struct spi_controller *host,
-					   struct spi_message *message)
-{
-	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-	struct completion *completion = &drv_data->completion;
-	struct spi_transfer *transfer;
-	int ret;
-
-	k1_spi_set_cs(message->spi, false);
-
-	list_for_each_entry(transfer, &message->transfers, transfer_list) {
-		reinit_completion(completion);
-
-		/* Issue the next transfer */
-		ret = k1_spi_transfer_one(host, message->spi, transfer);
-		if (ret < 0)
-			break;
-
-		if (ret > 0) {
-			ret = k1_spi_transfer_wait(drv_data, transfer);
-			if (ret < 0)
-				message->status = ret;
-		}
-
-		/* If the message status has changed, we're done */
-		if (message->status != -EINPROGRESS)
-			break;
-
-		spi_transfer_delay_exec(transfer);
-
-		message->actual_length += transfer->len;
-	}
-
-	k1_spi_set_cs(message->spi, true);
-
-	if (message->status == -EINPROGRESS)
-		message->status = ret;
-
-	spi_finalize_current_message(drv_data->host);
-
-	return 0;
-}
-
 static int k1_spi_prepare_message(struct spi_controller *host,
 				  struct spi_message *message)
 {
@@ -459,12 +385,6 @@ static int k1_spi_prepare_message(struct spi_controller *host,
 
 	k1_spi_flush(drv_data);
 
-	return 0;
-}
-
-static int k1_spi_unprepare_message(struct spi_controller *host,
-				    struct spi_message *message)
-{
 	return 0;
 }
 
@@ -493,7 +413,6 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 	host->transfer_one = k1_spi_transfer_one;
 	host->set_cs = k1_spi_set_cs;
 	host->prepare_message = k1_spi_prepare_message;
-	host->unprepare_message = k1_spi_unprepare_message;
 
 	ret = of_property_read_u32(np, "spi-max-frequency", &max_speed_hz);
 	if (!ret) {
