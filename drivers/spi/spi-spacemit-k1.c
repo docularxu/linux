@@ -385,13 +385,36 @@ static const struct of_device_id k1_spi_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
 
+static u32 k1_spi_max_speed_hz(struct k1_spi_driver_data *drv_data)
+{
+	struct device *dev = drv_data->dev;
+	u32 max;
+	int ret;
+	u32 hz;
+
+	/* If the max frequency is not specified (or error), use the default */
+	ret = of_property_read_u32(dev_of_node(dev), "spi-max-frequency", &max);
+	if (ret) {
+		if (ret != -EINVAL)
+			dev_warn(dev, "bad spi-max-frequency, using %u\n",
+				 K1_SPI_DEFAULT_MAX_SPEED_HZ);
+
+		return K1_SPI_DEFAULT_MAX_SPEED_HZ;
+	}
+
+	/* Otherwise ensure the specified frequency is in range */
+	hz = clamp(max, K1_SPI_MIN_SPEED_HZ, K1_SPI_MAX_SPEED_HZ);
+	if (hz != max)
+		dev_warn(dev, "spi-max-frequency %u out of range, using %u\n",
+			 max, hz);
+
+	return hz;
+}
+
 static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 {
 	struct device_node *np = dev_of_node(drv_data->dev);
 	struct spi_controller *host = drv_data->host;
-	struct device *dev = drv_data->dev;
-	u32 max_speed_hz;
-	int ret;
 
 	host->dev.of_node = np;
 	host->dev.parent = drv_data->dev;
@@ -404,20 +427,7 @@ static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
 	host->transfer_one = k1_spi_transfer_one;
 	host->set_cs = k1_spi_set_cs;
 	host->prepare_message = k1_spi_prepare_message;
-
-	ret = of_property_read_u32(np, "spi-max-frequency", &max_speed_hz);
-	if (!ret) {
-		host->max_speed_hz = clamp(max_speed_hz, K1_SPI_MIN_SPEED_HZ,
-					   K1_SPI_MAX_SPEED_HZ);
-		if (host->max_speed_hz != max_speed_hz)
-			dev_warn(dev, "spi-max-frequency %u out of range, using %u\n",
-				max_speed_hz, host->max_speed_hz);
-	} else {
-		if (ret != -EINVAL)
-			dev_warn(dev, "bad spi-max-frequency, using %u\n",
-				 K1_SPI_DEFAULT_MAX_SPEED_HZ);
-		host->max_speed_hz = K1_SPI_DEFAULT_MAX_SPEED_HZ;
-	}
+	host->max_speed_hz = k1_spi_max_speed_hz(drv_data);
 }
 
 /* Set our registers to a known initial state */
