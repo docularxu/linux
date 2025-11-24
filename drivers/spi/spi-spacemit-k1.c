@@ -44,15 +44,12 @@
 #define TOP_SPO				BIT(10)		/* Polarity: 0=low */
 #define TOP_SPH				BIT(11)		/* Half-cycle phase */
 #define TOP_LBM				BIT(12)		/* Loopback mode */
-#define TOP_TRAIL			BIT(13)		/* Trailing bytes */
 #define TOP_HOLD_FRAME_LOW		BIT(14)		/* Chip select */
 
 /* SSP FIFO Control Register */
 #define SSP_FIFO_CTRL		0x04
 #define FIFO_TFT_MASK			GENMASK(4, 0)	/* TX FIFO threshold */
 #define FIFO_RFT_MASK			GENMASK(9, 5)	/* RX FIFO threshold */
-#define FIFO_TSRE			BIT(10)		/* TX service request */
-#define FIFO_RSRE			BIT(11)		/* RX service request */
 
 /* SSP Interrupt Enable Register */
 #define SSP_INT_EN		0x08
