@@ -99,9 +99,7 @@ struct k1_spi_driver_data {
 	unsigned long rate;
 	int irq;
 
-	void *rx_buf;
 	unsigned int rx_resid;
-	const void *tx_buf;
 	unsigned int tx_resid;
 
 	struct spi_transfer *transfer;	/* Current transfer */
@@ -226,23 +224,26 @@ static void k1_spi_cleanup(struct spi_device *spi)
 
 static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
 {
+	struct spi_transfer *transfer = drv_data->transfer;
 	u32 bytes = drv_data->bytes;
 	u32 val;
 
+	/* Consume the next RX FIFO entry */
 	val = readl(drv_data->base + SSP_DATAR);
+	if (transfer->rx_buf) {
+		void *buf;
+
+		buf = transfer->rx_buf + (transfer->len - drv_data->rx_resid);
+
+		if (bytes == 1)
+			*(u8 *)buf = val;
+		else if (bytes == 2)
+			*(u16 *)buf = val;
+		else	/* bytes == 4 */
+			*(u32 *)buf = val;
+	}	/* Otherwise null reader: discard the data */
+
 	drv_data->rx_resid -= bytes;
-
-	if (!drv_data->rx_buf)
-		return;	/* Null reader: discard the data */
-
-	if (bytes == 1)
-		*(u8 *)drv_data->rx_buf = val;
-	else if (bytes == 2)
-		*(u16 *)drv_data->rx_buf = val;
-	else	/* bytes == 4 */
-		*(u32 *)drv_data->rx_buf = val;
-
-	drv_data->rx_buf += bytes;
 }
 
 static void k1_spi_read(struct k1_spi_driver_data *drv_data)
@@ -267,22 +268,27 @@ static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
 {
-	u32 val = 0;
-	u32 bytes;
+	struct spi_transfer *transfer = drv_data->transfer;
+	u32 bytes = drv_data->bytes;
+	u32 val;
 
-	bytes = drv_data->bytes;
-	if (drv_data->tx_buf) {
+	if (transfer->tx_buf) {
+		const void *buf;
+
+		buf = transfer->tx_buf + (transfer->len - drv_data->tx_resid);
 		if (bytes == 1)
-			val = *(u8 *)drv_data->tx_buf;
+			val = *(u8 *)buf;
 		else if (bytes == 2)
-			val = *(u16 *)drv_data->tx_buf;
+			val = *(u16 *)buf;
 		else	/* bytes == 4 */
-			val = *(u32 *)drv_data->tx_buf;
-		drv_data->tx_buf += bytes;
-	} /* Otherwise null writer; write 1, 2, or 4 zero bytes */
+			val = *(u32 *)buf;
+	} else {
+		val = 0;	/* Null writer; write 1, 2, or 4 zero bytes */
+	}
+	/* Fill the next TX FIFO entry */
+	writel(val, drv_data->base + SSP_DATAR);
 
 	drv_data->tx_resid -= bytes;
-	writel(val, drv_data->base + SSP_DATAR);
 }
 
 static void k1_spi_write(struct k1_spi_driver_data *drv_data)
@@ -330,13 +336,9 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 		return ret;
 	}
 
-	/* Determine how many words the len bytes represent */
+	/* Record how many words the len bytes represent */
 	count = transfer->len / drv_data->bytes;
-
-	/* Record the current transfer information */
-	drv_data->rx_buf = transfer->rx_buf;
 	drv_data->rx_resid = count;
-	drv_data->tx_buf = transfer->tx_buf;
 	drv_data->tx_resid = count;
 
 	drv_data->transfer = transfer;
