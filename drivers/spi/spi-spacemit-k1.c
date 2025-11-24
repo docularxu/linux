@@ -222,50 +222,6 @@ static void k1_spi_cleanup(struct spi_device *spi)
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 }
 
-static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
-{
-	struct spi_transfer *transfer = drv_data->transfer;
-	u32 bytes = drv_data->bytes;
-	u32 val;
-
-	/* Consume the next RX FIFO entry */
-	val = readl(drv_data->base + SSP_DATAR);
-	if (transfer->rx_buf) {
-		void *buf;
-
-		buf = transfer->rx_buf + (transfer->len - drv_data->rx_resid);
-
-		if (bytes == 1)
-			*(u8 *)buf = val;
-		else if (bytes == 2)
-			*(u16 *)buf = val;
-		else	/* bytes == 4 */
-			*(u32 *)buf = val;
-	}	/* Otherwise null reader: discard the data */
-
-	drv_data->rx_resid -= bytes;
-}
-
-static void k1_spi_read(struct k1_spi_driver_data *drv_data)
-{
-	do {
-		u32 val = readl(drv_data->base + SSP_STATUS);
-		unsigned int count;
-
-		/* Nothing to do if the FIFO is empty */
-		if (!(val & SSP_STATUS_RNE))
-			return;
-
-		/* Get the number of filled FIFO entries */
-		count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
-		/* Only read what we need */
-		count = min(count, drv_data->rx_resid);
-		do
-			k1_spi_read_word(drv_data);
-		while (--count);
-	} while (drv_data->rx_resid);
-}
-
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
 {
 	struct spi_transfer *transfer = drv_data->transfer;
@@ -313,6 +269,50 @@ static void k1_spi_write(struct k1_spi_driver_data *drv_data)
 	do
 		k1_spi_write_word(drv_data);
 	while (--count);
+}
+
+static void k1_spi_read_word(struct k1_spi_driver_data *drv_data)
+{
+	struct spi_transfer *transfer = drv_data->transfer;
+	u32 bytes = drv_data->bytes;
+	u32 val;
+
+	/* Consume the next RX FIFO entry */
+	val = readl(drv_data->base + SSP_DATAR);
+	if (transfer->rx_buf) {
+		void *buf;
+
+		buf = transfer->rx_buf + (transfer->len - drv_data->rx_resid);
+
+		if (bytes == 1)
+			*(u8 *)buf = val;
+		else if (bytes == 2)
+			*(u16 *)buf = val;
+		else	/* bytes == 4 */
+			*(u32 *)buf = val;
+	}	/* Otherwise null reader: discard the data */
+
+	drv_data->rx_resid -= bytes;
+}
+
+static void k1_spi_read(struct k1_spi_driver_data *drv_data)
+{
+	do {
+		u32 val = readl(drv_data->base + SSP_STATUS);
+		unsigned int count;
+
+		/* Nothing to do if the FIFO is empty */
+		if (!(val & SSP_STATUS_RNE))
+			return;
+
+		/* Get the number of filled FIFO entries */
+		count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
+		/* Only read what we need */
+		count = min(count, drv_data->rx_resid);
+		do
+			k1_spi_read_word(drv_data);
+		while (--count);
+	} while (drv_data->rx_resid);
 }
 
 static int k1_spi_transfer_one(struct spi_controller *host,
