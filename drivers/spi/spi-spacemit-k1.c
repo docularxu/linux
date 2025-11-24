@@ -185,7 +185,8 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data,
 	return 0;
 }
 
-static void k1_spi_set_cs(struct spi_device *spi, bool enable)
+/* Set logic level of chip select line (high=true means CS deasserted) */
+static void k1_spi_set_cs(struct spi_device *spi, bool high)
 {
 	struct k1_spi_driver_data *drv_data;
 	u32 val;
@@ -193,10 +194,10 @@ static void k1_spi_set_cs(struct spi_device *spi, bool enable)
 	drv_data = spi_controller_get_devdata(spi->controller);
 
 	val = readl(drv_data->base + SSP_TOP_CTRL);
-	if (enable)
-		val |= TOP_HOLD_FRAME_LOW;
-	else
+	if (high)
 		val &= ~TOP_HOLD_FRAME_LOW;
+	else
+		val |= TOP_HOLD_FRAME_LOW;
 	writel(val, drv_data->base + SSP_TOP_CTRL);
 }
 
@@ -419,7 +420,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 	struct spi_transfer *transfer;
 	int ret;
 
-	k1_spi_set_cs(message->spi, true);
+	k1_spi_set_cs(message->spi, false);
 
 	list_for_each_entry(transfer, &message->transfers, transfer_list) {
 		reinit_completion(completion);
@@ -444,7 +445,7 @@ static int k1_spi_transfer_one_message(struct spi_controller *host,
 		message->actual_length += transfer->len;
 	}
 
-	k1_spi_set_cs(message->spi, false);
+	k1_spi_set_cs(message->spi, true);
 
 	if (message->status == -EINPROGRESS)
 		message->status = ret;
