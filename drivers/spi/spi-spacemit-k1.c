@@ -93,7 +93,6 @@
 
 struct k1_spi_driver_data {
 	struct spi_controller *host;
-	struct device *dev;
 	void __iomem *base;
 	unsigned long bus_rate;
 	struct clk *clk;
@@ -387,9 +386,8 @@ static const struct of_device_id k1_spi_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
 
-static u32 k1_spi_max_speed_hz(struct k1_spi_driver_data *drv_data)
+static u32 k1_spi_max_speed_hz(struct device *dev)
 {
-	struct device *dev = drv_data->dev;
 	u32 max;
 	int ret;
 	u32 hz;
@@ -515,7 +513,6 @@ static int k1_spi_probe(struct platform_device *pdev)
 	drv_data = spi_controller_get_devdata(host);
 	drv_data->host = host;
 	platform_set_drvdata(pdev, drv_data);
-	drv_data->dev = dev;
 
 	drv_data->base = devm_platform_get_and_ioremap_resource(pdev, 0,
 								&iores);
@@ -563,7 +560,7 @@ static int k1_spi_probe(struct platform_device *pdev)
 	host->transfer_one = k1_spi_transfer_one;
 	host->set_cs = k1_spi_set_cs;
 	host->prepare_message = k1_spi_prepare_message;
-	host->max_speed_hz = k1_spi_max_speed_hz(drv_data);
+	host->max_speed_hz = k1_spi_max_speed_hz(dev);
 
 	ret = devm_spi_register_controller(dev, host);
 	if (ret)
