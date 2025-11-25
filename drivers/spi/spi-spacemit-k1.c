@@ -543,10 +543,8 @@ static struct platform_driver k1_spi_driver = {
 		.name		= "k1-spi",
 		.of_match_table	= k1_spi_dt_ids,
 	},
-	.probe			= k1_spi_probe,
 };
-
-module_platform_driver(k1_spi_driver);
+module_platform_driver_probe(k1_spi_driver, k1_spi_probe);
 
 MODULE_DESCRIPTION("SpacemiT K1 SPI controller driver");
 MODULE_LICENSE("GPL");
