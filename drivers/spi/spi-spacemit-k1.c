@@ -236,13 +236,9 @@ k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
 static void k1_spi_cleanup(struct spi_device *spi)
 {
 	struct k1_spi_driver_data *drv_data;
-	u32 val;
 
 	drv_data = spi_controller_get_devdata(spi->controller);
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	val &= ~(TOP_FRF_MASK | TOP_SPO | TOP_SPH | TOP_LBM);
-	writel(val, drv_data->base + SSP_TOP_CTRL);
+	k1_spi_register_reset(drv_data, false);
 }
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
@@ -542,20 +538,12 @@ static int k1_spi_probe(struct platform_device *pdev)
 	return ret;
 }
 
-static void k1_spi_remove(struct platform_device *pdev)
-{
-	struct k1_spi_driver_data *drv_data = platform_get_drvdata(pdev);
-
-	k1_spi_register_reset(drv_data, false);
-}
-
 static struct platform_driver k1_spi_driver = {
 	.driver = {
 		.name		= "k1-spi",
 		.of_match_table	= k1_spi_dt_ids,
 	},
 	.probe			= k1_spi_probe,
-	.remove			= k1_spi_remove,
 };
 
 module_platform_driver(k1_spi_driver);
