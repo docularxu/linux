@@ -175,6 +175,15 @@ static void k1_spi_cleanup(struct spi_device *spi)
 static bool k1_spi_can_dma(struct spi_controller *host, struct spi_device *spi,
 			   struct spi_transfer *transfer)
 {
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+
+	if (!drv_data->dma_enabled)
+		return false;
+
+	/* Don't bother with DMA if we can't do even a single burst */
+	if (transfer->len < K1_SPI_THRESH * drv_data->bytes)
+		return false;
+
 	return false;
 }
 
@@ -477,6 +486,69 @@ done:
 	return IRQ_HANDLED;
 }
 
+static int
+k1_spi_dma_setup(struct k1_spi_driver_data *drv_data, struct device *dev)
+{
+	struct spi_controller *host = drv_data->host;
+	struct dma_chan *chan;
+
+	chan = dma_request_chan(dev, "tx");
+	if (IS_ERR(chan))
+		return PTR_ERR(chan);
+	host->dma_tx = chan;
+
+	chan = dma_request_chan(dev, "rx");
+	if (IS_ERR(chan)) {
+		dma_release_channel(host->dma_tx);
+		host->dma_tx = NULL;
+		return PTR_ERR(chan);
+	}
+
+	return 0;
+}
+
+static void k1_spi_dma_cleanup(struct device *dev, void *res)
+{
+	struct k1_spi_driver_data *drv_data = res;
+	struct spi_controller *host;
+
+	host = drv_data->host;
+	if (!host->dma_tx)
+		return;
+
+	dma_release_channel(host->dma_rx);
+	host->dma_rx = NULL;
+	dma_release_channel(host->dma_tx);
+	host->dma_tx = NULL;
+}
+
+static int
+devm_k1_spi_dma_setup(struct k1_spi_driver_data *drv_data, struct device *dev)
+{
+	struct k1_spi_driver_data **ptr;
+	int ret;
+
+	if (!IS_ENABLED(CONFIG_MMP_PDMA)) {
+		dev_warn(dev, "DMA not available; using PIO\n");
+		return 0;
+	}
+
+	ptr = devres_alloc(k1_spi_dma_cleanup, sizeof(*ptr), GFP_KERNEL);
+	if (!ptr)
+		return -ENOMEM;
+
+	ret = k1_spi_dma_setup(drv_data, dev);
+	if (ret) {
+		devres_free(ptr);
+		return ret;
+	}
+
+	*ptr = drv_data;
+	devres_add(dev, ptr);
+
+	return 0;
+}
+
 static int k1_spi_probe(struct platform_device *pdev)
 {
 	struct k1_spi_driver_data *drv_data;
@@ -493,6 +565,10 @@ static int k1_spi_probe(struct platform_device *pdev)
 	drv_data = spi_controller_get_devdata(host);
 	drv_data->host = host;
 	platform_set_drvdata(pdev, drv_data);
+
+	ret = devm_k1_spi_dma_setup(drv_data, dev);
+	if (ret)
+		return dev_err_probe(dev, ret, "error setting up DMA\n");
 
 	drv_data->base = devm_platform_get_and_ioremap_resource(pdev, 0,
 								&iores);
