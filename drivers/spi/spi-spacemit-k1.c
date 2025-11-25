@@ -206,6 +206,33 @@ static int k1_spi_setup(struct spi_device *spi)
 	return 0;
 }
 
+/* Set our registers to a known initial state */
+static void
+k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
+{
+	u32 val = 0;
+
+	writel(0, drv_data->base + SSP_TOP_CTRL);
+
+	if (initial) {
+		/*
+		 * The TX and RX FIFO thresholds are the same no matter
+		 * what the speed or bits per word, so we can just set
+		 * them once.  The thresholds are one more than the values
+		 * in the register.
+		 */
+		val = FIELD_PREP(FIFO_RFT_MASK, K1_SPI_THRESH - 1);
+		val |= FIELD_PREP(FIFO_TFT_MASK, K1_SPI_THRESH - 1);
+	}
+	writel(val, drv_data->base + SSP_FIFO_CTRL);
+
+	writel(0, drv_data->base + SSP_INT_EN);
+	writel(0, drv_data->base + SSP_TIMEOUT);
+
+	/* Clear any pending interrupt conditions */
+	writel(~0, drv_data->base + SSP_STATUS);
+}
+
 static void k1_spi_cleanup(struct spi_device *spi)
 {
 	struct k1_spi_driver_data *drv_data;
@@ -382,33 +409,6 @@ static const struct of_device_id k1_spi_dt_ids[] = {
 	{}
 };
 MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
-
-/* Set our registers to a known initial state */
-static void
-k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
-{
-	u32 val = 0;
-
-	writel(0, drv_data->base + SSP_TOP_CTRL);
-
-	if (initial) {
-		/*
-		 * The TX and RX FIFO thresholds are the same no matter
-		 * what the speed or bits per word, so we can just set
-		 * them once.  The thresholds are one more than the values
-		 * in the register.
-		 */
-		val = FIELD_PREP(FIFO_RFT_MASK, K1_SPI_THRESH - 1);
-		val |= FIELD_PREP(FIFO_TFT_MASK, K1_SPI_THRESH - 1);
-	}
-	writel(val, drv_data->base + SSP_FIFO_CTRL);
-
-	writel(0, drv_data->base + SSP_INT_EN);
-	writel(0, drv_data->base + SSP_TIMEOUT);
-
-	/* Clear any pending interrupt conditions */
-	writel(~0, drv_data->base + SSP_STATUS);
-}
 
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
