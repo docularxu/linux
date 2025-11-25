@@ -33,8 +33,6 @@
 #define K1_SPI_DMA_ALIGNMENT	64
 #define K1_SPI_MAX_DMA_LEN	SZ_512K
 
-/* SpacemiT K1 SPI Registers */
-
 /* SSP Top Control Register */
 #define SSP_TOP_CTRL		0x00
 #define TOP_SSE				BIT(0)		/* Enable port */
@@ -60,6 +58,7 @@
 #define SSP_INT_EN_TIM			BIT(5)		/* TX FIFO underrun */
 #define SSP_INT_EN_EBCEI		BIT(6)		/* Bit count error */
 
+/* TX interrupts, RX interrupts, and error interrupts */
 #define SSP_INT_EN_TX		SSP_INT_EN_TIE
 #define SSP_INT_EN_RX \
 		(SSP_INT_EN_TINTE | SSP_INT_EN_RIE)
@@ -83,6 +82,8 @@
 #define SSP_STATUS_RFL			GENMASK(19, 15)	/* RX FIFO level */
 #define SSP_STATUS_ROR			BIT(20)		/* RX FIFO overrun */
 #define SSP_STATUS_BCE			BIT(21)		/* Bit count error */
+
+/* Error status mask */
 #define SSP_STATUS_ERROR \
 		(SSP_STATUS_TUR | SSP_STATUS_ROR |SSP_STATUS_BCE)
 
@@ -99,13 +100,12 @@ struct k1_spi_driver_data {
 	unsigned long rate;
 	int irq;
 
-	unsigned int rx_resid;
-	unsigned int tx_resid;
-
-	struct spi_transfer *transfer;	/* Current transfer */
-
 	/* Current transfer information; not valid if message is null */
 	u32 bytes;			/* Bytes used for bits_per_word */
+	unsigned int rx_resid;		/* RX bytes left in transfer */
+	unsigned int tx_resid;		/* TX bytes left in transfer */
+	struct spi_transfer *transfer;	/* Current transfer */
+
 };
 
 /* Set the transfer speed; the SPI core code ensures it is supported */
