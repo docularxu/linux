@@ -400,12 +400,6 @@ static int k1_spi_prepare_message(struct spi_controller *host,
 	return 0;
 }
 
-static const struct of_device_id k1_spi_dt_ids[] = {
-	{ .compatible = "spacemit,k1-spi", },
-	{}
-};
-MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
-
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
 {
 	struct k1_spi_driver_data *drv_data = dev_id;
@@ -537,6 +531,12 @@ static int k1_spi_probe(struct platform_device *pdev)
 
 	return ret;
 }
+
+static const struct of_device_id k1_spi_dt_ids[] = {
+	{ .compatible = "spacemit,k1-spi", },
+	{}
+};
+MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
 
 static struct platform_driver k1_spi_driver = {
 	.driver = {
