@@ -413,25 +413,6 @@ static u32 k1_spi_max_speed_hz(struct k1_spi_driver_data *drv_data)
 	return hz;
 }
 
-static void k1_spi_host_init(struct k1_spi_driver_data *drv_data)
-{
-	struct device_node *np = dev_of_node(drv_data->dev);
-	struct spi_controller *host = drv_data->host;
-
-	host->dev.of_node = np;
-	host->dev.parent = drv_data->dev;
-	host->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP;
-	host->bits_per_word_mask = SPI_BPW_RANGE_MASK(4, 32);
-	host->num_chipselect = 1;
-
-	host->setup = k1_spi_setup;
-	host->cleanup = k1_spi_cleanup;
-	host->transfer_one = k1_spi_transfer_one;
-	host->set_cs = k1_spi_set_cs;
-	host->prepare_message = k1_spi_prepare_message;
-	host->max_speed_hz = k1_spi_max_speed_hz(drv_data);
-}
-
 /* Set our registers to a known initial state */
 static void
 k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
@@ -542,7 +523,8 @@ static int k1_spi_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(drv_data->base),
 				     "error mapping memory\n");
 
-	k1_spi_host_init(drv_data);
+	/* Reset registers to a known initial state */
+	k1_spi_register_reset(drv_data, true);
 
 	clk_bus = devm_clk_get_enabled(dev, "bus");
 	if (IS_ERR(clk_bus))
@@ -560,8 +542,6 @@ static int k1_spi_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, PTR_ERR(reset),
 				     "error getting/deasserting reset\n");
 
-	k1_spi_register_reset(drv_data, true);
-
 	drv_data->irq = platform_get_irq(pdev, 0);
 	if (drv_data->irq < 0)
 		return dev_err_probe(dev, drv_data->irq, "error getting IRQ\n");
@@ -570,6 +550,20 @@ static int k1_spi_probe(struct platform_device *pdev)
 			       IRQF_SHARED, dev_name(dev), drv_data);
 	if (ret < 0)
 		return dev_err_probe(dev, ret, "error requesting IRQ\n");
+
+	/* Initialize the host structure, then register it */
+	host->dev.of_node = dev_of_node(dev);
+	host->dev.parent = dev;
+	host->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP;
+	host->bits_per_word_mask = SPI_BPW_RANGE_MASK(4, 32);
+	host->num_chipselect = 1;
+
+	host->setup = k1_spi_setup;
+	host->cleanup = k1_spi_cleanup;
+	host->transfer_one = k1_spi_transfer_one;
+	host->set_cs = k1_spi_set_cs;
+	host->prepare_message = k1_spi_prepare_message;
+	host->max_speed_hz = k1_spi_max_speed_hz(drv_data);
 
 	ret = devm_spi_register_controller(dev, host);
 	if (ret)
