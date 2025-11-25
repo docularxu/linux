@@ -225,6 +225,27 @@ static void k1_spi_cleanup(struct spi_device *spi)
 	k1_spi_register_reset(drv_data, false);
 }
 
+/* Flush the RX FIFO of any leftover data before processing a message */
+static int k1_spi_prepare_message(struct spi_controller *host,
+				  struct spi_message *message)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 val = readl(drv_data->base + SSP_STATUS);
+	u32 count;
+
+	/* If there's nothing in the FIFO, we're done */
+	if (!(val & SSP_STATUS_RNE))
+		return 0;
+
+	/* Read and discard what's there (one more than what the field says) */
+	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
+	do
+		(void)readl(drv_data->base + SSP_DATAR);
+	while (--count);
+
+	return 0;
+}
+
 /* Set logic level of chip select line (high=true means CS deasserted) */
 static void k1_spi_set_cs(struct spi_device *spi, bool high)
 {
@@ -284,27 +305,6 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
 	return 1;	/* Assume we're not done */
-}
-
-/* Flush the RX FIFO of any leftover data before processing a message */
-static int k1_spi_prepare_message(struct spi_controller *host,
-				  struct spi_message *message)
-{
-	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-	u32 val = readl(drv_data->base + SSP_STATUS);
-	u32 count;
-
-	/* If there's nothing in the FIFO, we're done */
-	if (!(val & SSP_STATUS_RNE))
-		return 0;
-
-	/* Read and discard what's there (one more than what the field says) */
-	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
-	do
-		(void)readl(drv_data->base + SSP_DATAR);
-	while (--count);
-
-	return 0;
 }
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
