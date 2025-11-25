@@ -158,22 +158,6 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data,
 	return 0;
 }
 
-/* Set logic level of chip select line (high=true means CS deasserted) */
-static void k1_spi_set_cs(struct spi_device *spi, bool high)
-{
-	struct k1_spi_driver_data *drv_data;
-	u32 val;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	if (high)
-		val &= ~TOP_HOLD_FRAME_LOW;
-	else
-		val |= TOP_HOLD_FRAME_LOW;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-}
-
 /*
  * The client can call the setup function multiple times, and each call
  * can specify a different SPI mode (and transfer speed).  Each transfer
@@ -332,6 +316,22 @@ static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 			k1_spi_read_word(drv_data);
 		while (--count);
 	} while (drv_data->rx_resid);
+}
+
+/* Set logic level of chip select line (high=true means CS deasserted) */
+static void k1_spi_set_cs(struct spi_device *spi, bool high)
+{
+	struct k1_spi_driver_data *drv_data;
+	u32 val;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	if (high)
+		val &= ~TOP_HOLD_FRAME_LOW;
+	else
+		val |= TOP_HOLD_FRAME_LOW;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
 }
 
 static int k1_spi_transfer_one(struct spi_controller *host,
