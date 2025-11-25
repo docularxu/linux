@@ -104,6 +104,110 @@ struct k1_spi_driver_data {
 
 };
 
+/* Set our registers to a known initial state */
+static void
+k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
+{
+	u32 val = 0;
+
+	writel(0, drv_data->base + SSP_TOP_CTRL);
+
+	if (initial) {
+		/*
+		 * The TX and RX FIFO thresholds are the same no matter
+		 * what the speed or bits per word, so we can just set
+		 * them once.  The thresholds are one more than the values
+		 * in the register.
+		 */
+		val = FIELD_PREP(FIFO_RFT_MASK, K1_SPI_THRESH - 1);
+		val |= FIELD_PREP(FIFO_TFT_MASK, K1_SPI_THRESH - 1);
+	}
+	writel(val, drv_data->base + SSP_FIFO_CTRL);
+
+	writel(0, drv_data->base + SSP_INT_EN);
+	writel(0, drv_data->base + SSP_TIMEOUT);
+
+	/* Clear any pending interrupt conditions */
+	writel(~0, drv_data->base + SSP_STATUS);
+}
+
+/*
+ * The client can call the setup function multiple times, and each call
+ * can specify a different SPI mode (and transfer speed).  Each transfer
+ * can specify its own speed though, and the core code ensures each
+ * transfer's speed is set to something nonzero and supported by both
+ * the controller and the device.  We just set the speed for each transfer.
+ */
+static int k1_spi_setup(struct spi_device *spi)
+{
+	struct k1_spi_driver_data *drv_data;
+	u32 val;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	/*
+	 * Configure the message format for this device.  We only
+	 * support Motorola SPI format in master mode.
+	 */
+	val = FIELD_PREP(TOP_FRF_MASK, TOP_FRF_MOTOROLA);
+
+	/* Translate the mode into the value used to program the hardware. */
+	if (spi->mode & SPI_CPHA)
+		val |= TOP_SPH;		/* 1/2 cycle */
+	if (spi->mode & SPI_CPOL)
+		val |= TOP_SPO;		/* active low */
+	if (spi->mode & SPI_LOOP)
+		val |= TOP_LBM;		/* enable loopback */
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+
+	return 0;
+}
+
+static void k1_spi_cleanup(struct spi_device *spi)
+{
+	struct k1_spi_driver_data *drv_data;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+	k1_spi_register_reset(drv_data, false);
+}
+
+/* Flush the RX FIFO of any leftover data before processing a message */
+static int k1_spi_prepare_message(struct spi_controller *host,
+				  struct spi_message *message)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 val = readl(drv_data->base + SSP_STATUS);
+	u32 count;
+
+	/* If there's nothing in the FIFO, we're done */
+	if (!(val & SSP_STATUS_RNE))
+		return 0;
+
+	/* Read and discard what's there (one more than what the field says) */
+	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
+	do
+		(void)readl(drv_data->base + SSP_DATAR);
+	while (--count);
+
+	return 0;
+}
+
+/* Set logic level of chip select line (high=true means CS deasserted) */
+static void k1_spi_set_cs(struct spi_device *spi, bool high)
+{
+	struct k1_spi_driver_data *drv_data;
+	u32 val;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	if (high)
+		val &= ~TOP_HOLD_FRAME_LOW;
+	else
+		val |= TOP_HOLD_FRAME_LOW;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+}
+
 /* Set the transfer speed; the SPI core code ensures it is supported */
 static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data,
 			    struct spi_transfer *transfer)
@@ -156,110 +260,6 @@ static int k1_spi_set_speed(struct k1_spi_driver_data *drv_data,
 	writel(val, drv_data->base + SSP_TIMEOUT);
 
 	return 0;
-}
-
-/*
- * The client can call the setup function multiple times, and each call
- * can specify a different SPI mode (and transfer speed).  Each transfer
- * can specify its own speed though, and the core code ensures each
- * transfer's speed is set to something nonzero and supported by both
- * the controller and the device.  We just set the speed for each transfer.
- */
-static int k1_spi_setup(struct spi_device *spi)
-{
-	struct k1_spi_driver_data *drv_data;
-	u32 val;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-
-	/*
-	 * Configure the message format for this device.  We only
-	 * support Motorola SPI format in master mode.
-	 */
-	val = FIELD_PREP(TOP_FRF_MASK, TOP_FRF_MOTOROLA);
-
-	/* Translate the mode into the value used to program the hardware. */
-	if (spi->mode & SPI_CPHA)
-		val |= TOP_SPH;		/* 1/2 cycle */
-	if (spi->mode & SPI_CPOL)
-		val |= TOP_SPO;		/* active low */
-	if (spi->mode & SPI_LOOP)
-		val |= TOP_LBM;		/* enable loopback */
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-
-	return 0;
-}
-
-/* Set our registers to a known initial state */
-static void
-k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
-{
-	u32 val = 0;
-
-	writel(0, drv_data->base + SSP_TOP_CTRL);
-
-	if (initial) {
-		/*
-		 * The TX and RX FIFO thresholds are the same no matter
-		 * what the speed or bits per word, so we can just set
-		 * them once.  The thresholds are one more than the values
-		 * in the register.
-		 */
-		val = FIELD_PREP(FIFO_RFT_MASK, K1_SPI_THRESH - 1);
-		val |= FIELD_PREP(FIFO_TFT_MASK, K1_SPI_THRESH - 1);
-	}
-	writel(val, drv_data->base + SSP_FIFO_CTRL);
-
-	writel(0, drv_data->base + SSP_INT_EN);
-	writel(0, drv_data->base + SSP_TIMEOUT);
-
-	/* Clear any pending interrupt conditions */
-	writel(~0, drv_data->base + SSP_STATUS);
-}
-
-static void k1_spi_cleanup(struct spi_device *spi)
-{
-	struct k1_spi_driver_data *drv_data;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-	k1_spi_register_reset(drv_data, false);
-}
-
-/* Flush the RX FIFO of any leftover data before processing a message */
-static int k1_spi_prepare_message(struct spi_controller *host,
-				  struct spi_message *message)
-{
-	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-	u32 val = readl(drv_data->base + SSP_STATUS);
-	u32 count;
-
-	/* If there's nothing in the FIFO, we're done */
-	if (!(val & SSP_STATUS_RNE))
-		return 0;
-
-	/* Read and discard what's there (one more than what the field says) */
-	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
-	do
-		(void)readl(drv_data->base + SSP_DATAR);
-	while (--count);
-
-	return 0;
-}
-
-/* Set logic level of chip select line (high=true means CS deasserted) */
-static void k1_spi_set_cs(struct spi_device *spi, bool high)
-{
-	struct k1_spi_driver_data *drv_data;
-	u32 val;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	if (high)
-		val &= ~TOP_HOLD_FRAME_LOW;
-	else
-		val |= TOP_HOLD_FRAME_LOW;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
 }
 
 static int k1_spi_transfer_one(struct spi_controller *host,
