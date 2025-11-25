@@ -28,7 +28,7 @@
 
 /* DMA constraints */
 #define K1_SPI_DMA_ALIGNMENT		64
-#define K1_SPI_MAX_DMA_LEN	SZ_512K
+#define K1_SPI_MAX_DMA_LEN		SZ_512K
 
 /* SSP Top Control Register */
 #define SSP_TOP_CTRL		0x00
@@ -39,12 +39,15 @@
 #define TOP_SPO				BIT(10)		/* Polarity: 0=low */
 #define TOP_SPH				BIT(11)		/* Half-cycle phase */
 #define TOP_LBM				BIT(12)		/* Loopback mode */
+#define TOP_TRAIL			BIT(13)		/* Trailing bytes */
 #define TOP_HOLD_FRAME_LOW		BIT(14)		/* Chip select */
 
 /* SSP FIFO Control Register */
 #define SSP_FIFO_CTRL		0x04
 #define FIFO_TFT_MASK			GENMASK(4, 0)	/* TX FIFO threshold */
 #define FIFO_RFT_MASK			GENMASK(9, 5)	/* RX FIFO threshold */
+#define FIFO_TSRE			BIT(10)		/* TX service request */
+#define FIFO_RSRE			BIT(11)		/* RX service request */
 
 /* SSP Interrupt Enable Register */
 #define SSP_INT_EN		0x08
@@ -91,6 +94,7 @@
 struct k1_spi_driver_data {
 	struct spi_controller *host;
 	void __iomem *base;
+	phys_addr_t base_addr;
 	unsigned long bus_rate;
 	struct clk *clk;
 	unsigned long rate;
@@ -185,6 +189,109 @@ static bool k1_spi_can_dma(struct spi_controller *host, struct spi_device *spi,
 		return false;
 
 	return false;
+}
+
+static void k1_spi_dma_callback(void *param)
+{
+	struct k1_spi_driver_data *drv_data = param;
+	u32 val;
+
+	val = readl(drv_data->base + SSP_FIFO_CTRL);
+	val &= ~(FIFO_TSRE | FIFO_RSRE);
+	writel(val, drv_data->base + SSP_FIFO_CTRL);
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	val &= ~TOP_TRAIL;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+
+	/* Check for any error conditions */
+	val = readl(drv_data->base + SSP_STATUS);
+	if (val & SSP_STATUS_ERROR)
+		drv_data->transfer->error |= SPI_TRANS_FAIL_IO;
+
+	/* Disable the port */
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	val &= ~TOP_SSE;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+
+	drv_data->transfer = NULL;
+
+	spi_finalize_current_transfer(drv_data->host);
+}
+
+static int k1_spi_dma_one(struct spi_controller *host, struct spi_device *spi,
+			  struct spi_transfer *transfer)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 dma_burst_size = K1_SPI_THRESH * drv_data->bytes;
+	phys_addr_t addr = drv_data->base_addr + SSP_DATAR;
+	struct dma_async_tx_descriptor *tx_desc;
+	struct dma_async_tx_descriptor *rx_desc;
+	enum dma_slave_buswidth width;
+	struct dma_slave_config cfg;
+	struct sg_table *sgt;
+	u32 val;
+	int ret;
+
+	width = drv_data->bytes == 1 ? DMA_SLAVE_BUSWIDTH_1_BYTE :
+		drv_data->bytes == 2 ? DMA_SLAVE_BUSWIDTH_2_BYTES :
+		/* bytes == 4 */       DMA_SLAVE_BUSWIDTH_4_BYTES;
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.direction = DMA_MEM_TO_DEV;
+	cfg.dst_addr = addr;
+	cfg.dst_addr_width = width;
+	cfg.dst_maxburst = dma_burst_size;
+	ret = dmaengine_slave_config(host->dma_tx, &cfg);
+	if (ret)
+		goto fallback;
+
+	sgt = &transfer->tx_sg;
+	tx_desc = dmaengine_prep_slave_sg(host->dma_tx, sgt->sgl, sgt->nents,
+					  cfg.direction,
+					  DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!tx_desc)
+		goto fallback;
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.direction = DMA_DEV_TO_MEM;
+	cfg.src_addr = addr;
+	cfg.src_addr_width = width;
+	cfg.src_maxburst = dma_burst_size;
+	ret = dmaengine_slave_config(host->dma_rx, &cfg);
+	if (ret)
+		goto fallback;
+
+	sgt = &transfer->rx_sg;
+	rx_desc = dmaengine_prep_slave_sg(host->dma_rx, sgt->sgl, sgt->nents,
+					  cfg.direction,
+					  DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!rx_desc)
+		goto fallback;
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	val |= TOP_TRAIL;		/* Trailing bytes handled by DMA */
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+
+	val = readl(drv_data->base + SSP_FIFO_CTRL);
+	val |= FIFO_TSRE | FIFO_RSRE;
+	writel(val, drv_data->base + SSP_FIFO_CTRL);
+
+	/* When RX is complete we also know TX has completed */
+	rx_desc->callback = k1_spi_dma_callback;
+	rx_desc->callback_param = drv_data;
+
+	dmaengine_submit(tx_desc);
+	dmaengine_submit(rx_desc);
+
+	dma_async_issue_pending(host->dma_tx);
+	dma_async_issue_pending(host->dma_rx);
+
+	return 1;
+fallback:
+	transfer->error |= SPI_TRANS_FAIL_NO_START;
+
+	return -EAGAIN;
 }
 
 /* Flush the RX FIFO of any leftover data before processing a message */
@@ -313,6 +420,9 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	ctrl |= TOP_SSE;
 	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
+	if (k1_spi_can_dma(host, spi, transfer))
+		return k1_spi_dma_one(host, spi, transfer);
+
 	/* Clear any existing interrupt conditions */
 	writel(~0, drv_data->base + SSP_STATUS);
 
@@ -326,6 +436,8 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 static void
 k1_spi_handle_err(struct spi_controller *host, struct spi_message *message)
 {
+	dmaengine_terminate_sync(host->dma_rx);
+	dmaengine_terminate_sync(host->dma_tx);
 }
 
 static int k1_spi_unprepare_message(struct spi_controller *ctlr,
@@ -503,6 +615,9 @@ k1_spi_dma_setup(struct k1_spi_driver_data *drv_data, struct device *dev)
 		host->dma_tx = NULL;
 		return PTR_ERR(chan);
 	}
+	host->dma_rx = chan;
+
+	drv_data->dma_enabled = true;
 
 	return 0;
 }
@@ -512,9 +627,10 @@ static void k1_spi_dma_cleanup(struct device *dev, void *res)
 	struct k1_spi_driver_data *drv_data = res;
 	struct spi_controller *host;
 
-	host = drv_data->host;
-	if (!host->dma_tx)
+	if (!drv_data->dma_enabled)
 		return;
+
+	drv_data->dma_enabled = false;
 
 	dma_release_channel(host->dma_rx);
 	host->dma_rx = NULL;
@@ -566,6 +682,7 @@ static int k1_spi_probe(struct platform_device *pdev)
 	drv_data->host = host;
 	platform_set_drvdata(pdev, drv_data);
 
+	/* XXX If DMA setup fails, just warn and fall back to PIO */
 	ret = devm_k1_spi_dma_setup(drv_data, dev);
 	if (ret)
 		return dev_err_probe(dev, ret, "error setting up DMA\n");
@@ -575,6 +692,7 @@ static int k1_spi_probe(struct platform_device *pdev)
 	if (IS_ERR(drv_data->base))
 		return dev_err_probe(dev, PTR_ERR(drv_data->base),
 				     "error mapping memory\n");
+	drv_data->base_addr = iores->start;
 
 	/* Reset registers to a known initial state */
 	k1_spi_register_reset(drv_data, true);
