@@ -27,7 +27,7 @@
 #define K1_SPI_MAX_SPEED_HZ		51200000
 
 /* DMA constraints */
-#define K1_SPI_DMA_ALIGNMENT	64
+#define K1_SPI_DMA_ALIGNMENT		64
 #define K1_SPI_MAX_DMA_LEN	SZ_512K
 
 /* SSP Top Control Register */
@@ -102,6 +102,7 @@ struct k1_spi_driver_data {
 	unsigned int tx_resid;		/* TX bytes left in transfer */
 	struct spi_transfer *transfer;	/* Current transfer */
 
+	bool dma_enabled;
 };
 
 /* Set our registers to a known initial state */
@@ -169,6 +170,12 @@ static void k1_spi_cleanup(struct spi_device *spi)
 
 	drv_data = spi_controller_get_devdata(spi->controller);
 	k1_spi_register_reset(drv_data, false);
+}
+
+static bool k1_spi_can_dma(struct spi_controller *host, struct spi_device *spi,
+			   struct spi_transfer *transfer)
+{
+	return false;
 }
 
 /* Flush the RX FIFO of any leftover data before processing a message */
@@ -305,6 +312,17 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	writel(val, drv_data->base + SSP_INT_EN);
 
 	return 1;	/* We will call spi_finalize_current_transfer() */
+}
+
+static void
+k1_spi_handle_err(struct spi_controller *host, struct spi_message *message)
+{
+}
+
+static int k1_spi_unprepare_message(struct spi_controller *ctlr,
+				    struct spi_message *message)
+{
+	return 0;
 }
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
@@ -514,16 +532,23 @@ static int k1_spi_probe(struct platform_device *pdev)
 	host->dev.of_node = dev_of_node(dev);
 	host->dev.parent = dev;
 	host->num_chipselect = 1;
+	if (drv_data->dma_enabled)
+		host->dma_alignment = K1_SPI_DMA_ALIGNMENT;
 	host->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP;
 	host->bits_per_word_mask = SPI_BPW_RANGE_MASK(4, 32);
 	host->min_speed_hz = K1_SPI_MIN_SPEED_HZ;
 	host->max_speed_hz = K1_SPI_MAX_SPEED_HZ;
+	host->flags = SPI_CONTROLLER_MUST_RX | SPI_CONTROLLER_MUST_TX;
+	host->max_dma_len = K1_SPI_MAX_DMA_LEN;
 
 	host->setup = k1_spi_setup;
 	host->cleanup = k1_spi_cleanup;
+	host->can_dma = k1_spi_can_dma;
 	host->prepare_message = k1_spi_prepare_message;
+	host->unprepare_message = k1_spi_unprepare_message;
 	host->set_cs = k1_spi_set_cs;
 	host->transfer_one = k1_spi_transfer_one;
+	host->handle_err = k1_spi_handle_err;
 
 	ret = devm_spi_register_controller(dev, host);
 	if (ret)
