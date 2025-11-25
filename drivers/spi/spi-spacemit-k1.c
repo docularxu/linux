@@ -26,9 +26,6 @@
 #define K1_SPI_MIN_SPEED_HZ		6250
 #define K1_SPI_MAX_SPEED_HZ		51200000
 
-/* Default speed used if spi-max-frequency is invalid or not present */
-#define K1_SPI_DEFAULT_MAX_SPEED_HZ	25600000
-
 /* DMA constraints */
 #define K1_SPI_DMA_ALIGNMENT	64
 #define K1_SPI_MAX_DMA_LEN	SZ_512K
@@ -386,31 +383,6 @@ static const struct of_device_id k1_spi_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
 
-static u32 k1_spi_max_speed_hz(struct device *dev)
-{
-	u32 max;
-	int ret;
-	u32 hz;
-
-	/* If the max frequency is not specified (or error), use the default */
-	ret = of_property_read_u32(dev_of_node(dev), "spi-max-frequency", &max);
-	if (ret) {
-		if (ret != -EINVAL)
-			dev_warn(dev, "bad spi-max-frequency, using %u\n",
-				 K1_SPI_DEFAULT_MAX_SPEED_HZ);
-
-		return K1_SPI_DEFAULT_MAX_SPEED_HZ;
-	}
-
-	/* Otherwise ensure the specified frequency is in range */
-	hz = clamp(max, K1_SPI_MIN_SPEED_HZ, K1_SPI_MAX_SPEED_HZ);
-	if (hz != max)
-		dev_warn(dev, "spi-max-frequency %u out of range, using %u\n",
-			 max, hz);
-
-	return hz;
-}
-
 /* Set our registers to a known initial state */
 static void
 k1_spi_register_reset(struct k1_spi_driver_data *drv_data, bool initial)
@@ -551,16 +523,17 @@ static int k1_spi_probe(struct platform_device *pdev)
 	/* Initialize the host structure, then register it */
 	host->dev.of_node = dev_of_node(dev);
 	host->dev.parent = dev;
+	host->num_chipselect = 1;
 	host->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP;
 	host->bits_per_word_mask = SPI_BPW_RANGE_MASK(4, 32);
-	host->num_chipselect = 1;
+	host->min_speed_hz = K1_SPI_MIN_SPEED_HZ;
+	host->max_speed_hz = K1_SPI_MAX_SPEED_HZ;
 
 	host->setup = k1_spi_setup;
 	host->cleanup = k1_spi_cleanup;
-	host->transfer_one = k1_spi_transfer_one;
-	host->set_cs = k1_spi_set_cs;
 	host->prepare_message = k1_spi_prepare_message;
-	host->max_speed_hz = k1_spi_max_speed_hz(dev);
+	host->set_cs = k1_spi_set_cs;
+	host->transfer_one = k1_spi_transfer_one;
 
 	ret = devm_spi_register_controller(dev, host);
 	if (ret)
