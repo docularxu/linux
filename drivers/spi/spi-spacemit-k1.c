@@ -331,7 +331,7 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	/* Each transfer can also specify a different rate */
 	ret = k1_spi_set_speed(drv_data, transfer);
 	if (ret) {
-		dev_err(drv_data->dev,
+		dev_err(&host->dev,
 			"failed to set transfer speed: %d\n", ret);
 		return ret;
 	}
