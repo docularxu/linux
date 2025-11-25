@@ -290,13 +290,6 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 
 	drv_data->transfer = transfer;
 
-	/* Clear any existing interrupt conditions */
-	writel(~0, drv_data->base + SSP_STATUS);
-
-	/* An interrupt will initiate the transfer */
-	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
-	writel(val, drv_data->base + SSP_INT_EN);
-
 	/* Set the data (word) size, and enable the port */
 	ctrl = readl(drv_data->base + SSP_TOP_CTRL);
 	ctrl &= ~TOP_DSS_MASK;
@@ -304,7 +297,14 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	ctrl |= TOP_SSE;
 	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
-	return 1;	/* Assume we're not done */
+	/* Clear any existing interrupt conditions */
+	writel(~0, drv_data->base + SSP_STATUS);
+
+	/* An interrupt will initiate the transfer */
+	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
+	writel(val, drv_data->base + SSP_INT_EN);
+
+	return 1;	/* We will call spi_finalize_current_transfer() */
 }
 
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
