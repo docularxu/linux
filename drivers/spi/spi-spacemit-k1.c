@@ -225,6 +225,88 @@ static void k1_spi_cleanup(struct spi_device *spi)
 	k1_spi_register_reset(drv_data, false);
 }
 
+/* Set logic level of chip select line (high=true means CS deasserted) */
+static void k1_spi_set_cs(struct spi_device *spi, bool high)
+{
+	struct k1_spi_driver_data *drv_data;
+	u32 val;
+
+	drv_data = spi_controller_get_devdata(spi->controller);
+
+	val = readl(drv_data->base + SSP_TOP_CTRL);
+	if (high)
+		val &= ~TOP_HOLD_FRAME_LOW;
+	else
+		val |= TOP_HOLD_FRAME_LOW;
+	writel(val, drv_data->base + SSP_TOP_CTRL);
+}
+
+static int k1_spi_transfer_one(struct spi_controller *host,
+			       struct spi_device *spi,
+			       struct spi_transfer *transfer)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 count;
+	u32 ctrl;
+	u32 val;
+	int ret;
+
+	/* Bits per word can change on a per-transfer basis */
+	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
+
+	/* Each transfer can also specify a different rate */
+	ret = k1_spi_set_speed(drv_data, transfer);
+	if (ret) {
+		dev_err(&host->dev,
+			"failed to set transfer speed: %d\n", ret);
+		return ret;
+	}
+
+	/* Record how many words the len bytes represent */
+	count = transfer->len / drv_data->bytes;
+	drv_data->rx_resid = count;
+	drv_data->tx_resid = count;
+
+	drv_data->transfer = transfer;
+
+	/* Clear any existing interrupt conditions */
+	writel(~0, drv_data->base + SSP_STATUS);
+
+	/* An interrupt will initiate the transfer */
+	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
+	writel(val, drv_data->base + SSP_INT_EN);
+
+	/* Set the data (word) size, and enable the port */
+	ctrl = readl(drv_data->base + SSP_TOP_CTRL);
+	ctrl &= ~TOP_DSS_MASK;
+	ctrl |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
+	ctrl |= TOP_SSE;
+	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
+
+	return 1;	/* Assume we're not done */
+}
+
+/* Flush the RX FIFO of any leftover data before processing a message */
+static int k1_spi_prepare_message(struct spi_controller *host,
+				  struct spi_message *message)
+{
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+	u32 val = readl(drv_data->base + SSP_STATUS);
+	u32 count;
+
+	/* If there's nothing in the FIFO, we're done */
+	if (!(val & SSP_STATUS_RNE))
+		return 0;
+
+	/* Read and discard what's there (one more than what the field says) */
+	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
+	do
+		(void)readl(drv_data->base + SSP_DATAR);
+	while (--count);
+
+	return 0;
+}
+
 static void k1_spi_write_word(struct k1_spi_driver_data *drv_data)
 {
 	struct spi_transfer *transfer = drv_data->transfer;
@@ -316,88 +398,6 @@ static void k1_spi_read(struct k1_spi_driver_data *drv_data)
 			k1_spi_read_word(drv_data);
 		while (--count);
 	} while (drv_data->rx_resid);
-}
-
-/* Set logic level of chip select line (high=true means CS deasserted) */
-static void k1_spi_set_cs(struct spi_device *spi, bool high)
-{
-	struct k1_spi_driver_data *drv_data;
-	u32 val;
-
-	drv_data = spi_controller_get_devdata(spi->controller);
-
-	val = readl(drv_data->base + SSP_TOP_CTRL);
-	if (high)
-		val &= ~TOP_HOLD_FRAME_LOW;
-	else
-		val |= TOP_HOLD_FRAME_LOW;
-	writel(val, drv_data->base + SSP_TOP_CTRL);
-}
-
-static int k1_spi_transfer_one(struct spi_controller *host,
-			       struct spi_device *spi,
-			       struct spi_transfer *transfer)
-{
-	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-	u32 count;
-	u32 ctrl;
-	u32 val;
-	int ret;
-
-	/* Bits per word can change on a per-transfer basis */
-	drv_data->bytes = spi_bpw_to_bytes(transfer->bits_per_word);
-
-	/* Each transfer can also specify a different rate */
-	ret = k1_spi_set_speed(drv_data, transfer);
-	if (ret) {
-		dev_err(&host->dev,
-			"failed to set transfer speed: %d\n", ret);
-		return ret;
-	}
-
-	/* Record how many words the len bytes represent */
-	count = transfer->len / drv_data->bytes;
-	drv_data->rx_resid = count;
-	drv_data->tx_resid = count;
-
-	drv_data->transfer = transfer;
-
-	/* Clear any existing interrupt conditions */
-	writel(~0, drv_data->base + SSP_STATUS);
-
-	/* An interrupt will initiate the transfer */
-	val = SSP_INT_EN_TX | SSP_INT_EN_RX | SSP_INT_EN_ERROR;
-	writel(val, drv_data->base + SSP_INT_EN);
-
-	/* Set the data (word) size, and enable the port */
-	ctrl = readl(drv_data->base + SSP_TOP_CTRL);
-	ctrl &= ~TOP_DSS_MASK;
-	ctrl |= FIELD_PREP(TOP_DSS_MASK, transfer->bits_per_word - 1);
-	ctrl |= TOP_SSE;
-	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
-
-	return 1;	/* Assume we're not done */
-}
-
-/* Flush the RX FIFO of any leftover data before processing a message */
-static int k1_spi_prepare_message(struct spi_controller *host,
-				  struct spi_message *message)
-{
-	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
-	u32 val = readl(drv_data->base + SSP_STATUS);
-	u32 count;
-
-	/* If there's nothing in the FIFO, we're done */
-	if (!(val & SSP_STATUS_RNE))
-		return 0;
-
-	/* Read and discard what's there (one more than what the field says) */
-	count = FIELD_GET(SSP_STATUS_RFL, val) + 1;
-	do
-		(void)readl(drv_data->base + SSP_DATAR);
-	while (--count);
-
-	return 0;
 }
 
 static irqreturn_t k1_spi_ssp_isr(int irq, void *dev_id)
