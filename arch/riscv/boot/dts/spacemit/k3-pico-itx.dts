@@ -27,9 +27,20 @@
 		stdout-path = "serial0";
 	};
 
-	memory@100200000 {
+	memory@100000000 {
 		device_type = "memory";
-		reg = <0x1 0x00200000 0x3 0xffe00000>;
+		reg = <0x1 0x00000000 0x4 0x00000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		opensbi_reserved: opensbi@100000000 {
+			reg = <0x1 0x00000000 0x0 0x00200000>;
+			no-map;
+		};
 	};
 };
 
