@@ -267,6 +267,13 @@ properties:
             ratified in RISC-V Profiles Version 1.0, with commit b1d806605f87
             ("Updated to ratified state.")
 
+        - const: sv39
+          description:
+            The standard Sv39 supervisor-level extension for page-based 39-bit
+            virtual-memory system as ratified in the RISC-V Instruction Set
+            Manual, Volume II: Privileged Architecture, Document Version
+            20190405-Priv-MSU-Ratification.
+
         - const: svade
           description: |
             The standard Svade supervisor-level extension for SW-managed PTE A/D
