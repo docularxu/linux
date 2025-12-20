@@ -905,6 +905,15 @@ properties:
                 const: shvstvecd
             - contains:
                 const: ssstateen
+      # Svnapot and Svpbmt depend on Sv39
+      - if:
+          contains:
+            anyOf:
+              - const: svnapot
+              - const: svpbmt
+        then:
+          contains:
+            const: sv39
       # Zcb depends on Zca
       - if:
           contains:
