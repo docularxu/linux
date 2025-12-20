@@ -295,6 +295,12 @@ properties:
             privileged ISA specification. Please refer to Svade dt-binding
             description for more details.
 
+        - const: svbare
+          description:
+            The standard Svbare supervisor-level extension for Bare mode
+            virtual-memory translation support, as ratified in RISC-V Profiles
+            Version 1.0, with commit b1d806605f87 ("Updated to ratified state.")
+
         - const: svinval
           description:
             The standard Svinval supervisor-level extension for fine-grained
