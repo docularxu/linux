@@ -371,6 +371,13 @@ properties:
             in commit 64074bc ("Update version numbers for Zfh/Zfinx") of
             riscv-isa-manual.
 
+        - const: ziccamoa
+          description:
+            The standard Ziccamoa extension for main memory (cacheability and
+            coherence) must support all atomics in A, as ratified in RISC-V
+            Profiles Version 1.0, with commit b1d806605f87 ("Updated to
+            ratified state.")
+
         - const: ziccif
           description:
             The standard Ziccif extension for main memory (cacheability and
@@ -783,6 +790,13 @@ properties:
         then:
           contains:
             const: f
+      # Ziccamoa depends on A
+      - if:
+          contains:
+            const: ziccamoa
+        then:
+          contains:
+            const: a
       # Zvfbfmin depends on V or Zve32f
       - if:
           contains:
