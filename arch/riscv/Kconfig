@@ -570,11 +570,18 @@ config RISCV_ISA_SUPM
 	depends on 64BIT
 	default y
 	help
-	  Add support for pointer masking in userspace (Supm) when the
-	  underlying hardware extension (Smnpm or Ssnpm) is detected at boot.
+	  Allow support for the Supm extension (userspace pointer masking). The
+	  Supm extension allows userspace to mask pointers by ignoring the top
+	  bits of a virtual address.
 
-	  If this option is disabled, userspace will be unable to use
-	  the prctl(PR_{SET,GET}_TAGGED_ADDR_CTRL) API.
+	  When this option is enabled and the Supm extension is detected at
+	  boot, userspace will be able to use the
+	  prctl(PR_{SET,GET}_TAGGED_ADDR_CTRL) API to enable pointer masking.
+
+	  If this option is disabled, userspace will be unable to use this
+	  API, even if the hardware supports Supm.
+
+	  If you don't know what to do here, say Y.
 
 config RISCV_ISA_SVNAPOT
 	bool "Svnapot extension support for supervisor mode NAPOT pages"

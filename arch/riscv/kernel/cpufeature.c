@@ -274,6 +274,24 @@ static int riscv_ext_svadu_validate(const struct riscv_isa_ext_data *data,
 	return 0;
 }
 
+static int riscv_ext_supm_validate(const struct riscv_isa_ext_data *data,
+				   const unsigned long *isa_bitmap)
+{
+	if (!IS_ENABLED(CONFIG_RISCV_ISA_SUPM))
+		return -EINVAL;
+
+	/* Check if the underlying extension (ssnpm or smnpm) is available */
+	if (IS_ENABLED(CONFIG_RISCV_M_MODE)) {
+		if (!__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_SMNPM))
+			return -EPROBE_DEFER;
+	} else {
+		if (!__riscv_isa_extension_available(isa_bitmap, RISCV_ISA_EXT_SSNPM))
+			return -EPROBE_DEFER;
+	}
+
+	return 0;
+}
+
 static const unsigned int riscv_a_exts[] = {
 	RISCV_ISA_EXT_ZAAMO,
 	RISCV_ISA_EXT_ZALRSC,
@@ -390,6 +408,11 @@ static const unsigned int riscv_zve64x_exts[] = {
  */
 static const unsigned int riscv_xlinuxenvcfg_exts[] = {
 	RISCV_ISA_EXT_XLINUXENVCFG
+};
+
+static const unsigned inti riscv_supm_exts[] = {
+	RISCV_ISA_EXT_XLINUXENVCFG,
+	RISCV_ISA_EXT_SUPM
 };
 
 /*
@@ -538,11 +561,11 @@ const struct riscv_isa_ext_data riscv_isa_ext[] = {
 	__RISCV_ISA_EXT_DATA_VALIDATE(zvkt, RISCV_ISA_EXT_ZVKT, riscv_ext_vector_crypto_validate),
 	__RISCV_ISA_EXT_DATA(smaia, RISCV_ISA_EXT_SMAIA),
 	__RISCV_ISA_EXT_DATA(smmpm, RISCV_ISA_EXT_SMMPM),
-	__RISCV_ISA_EXT_SUPERSET(smnpm, RISCV_ISA_EXT_SMNPM, riscv_xlinuxenvcfg_exts),
+	__RISCV_ISA_EXT_SUPERSET_VALIDATE(smnpm, RISCV_ISA_EXT_SMNPM, riscv_supm_exts, riscv_ext_supm_validate),
 	__RISCV_ISA_EXT_DATA(smstateen, RISCV_ISA_EXT_SMSTATEEN),
 	__RISCV_ISA_EXT_DATA(ssaia, RISCV_ISA_EXT_SSAIA),
 	__RISCV_ISA_EXT_DATA(sscofpmf, RISCV_ISA_EXT_SSCOFPMF),
-	__RISCV_ISA_EXT_SUPERSET(ssnpm, RISCV_ISA_EXT_SSNPM, riscv_xlinuxenvcfg_exts),
+	__RISCV_ISA_EXT_SUPERSET_VALIDATE(ssnpm, RISCV_ISA_EXT_SSNPM, riscv_supm_exts, riscv_ext_supm_validate),
 	__RISCV_ISA_EXT_DATA(sstc, RISCV_ISA_EXT_SSTC),
 	__RISCV_ISA_EXT_DATA(svade, RISCV_ISA_EXT_SVADE),
 	__RISCV_ISA_EXT_DATA_VALIDATE(svadu, RISCV_ISA_EXT_SVADU, riscv_ext_svadu_validate),
