@@ -50,7 +50,7 @@ static int spacemit_reset_controller_register(struct device *dev,
 	struct reset_controller_dev *rcdev = &controller->rcdev;
 
 	rcdev->ops = &spacemit_reset_control_ops;
-	rcdev->owner = THIS_MODULE;
+	rcdev->owner = dev->driver->owner;
 	rcdev->of_node = dev->of_node;
 	rcdev->nr_resets = controller->data->count;
 
@@ -76,4 +76,3 @@ EXPORT_SYMBOL_NS_GPL(spacemit_reset_probe, "RESET_SPACEMIT");
 
 MODULE_DESCRIPTION("SpacemiT reset controller driver - common code");
 MODULE_LICENSE("GPL");
-
