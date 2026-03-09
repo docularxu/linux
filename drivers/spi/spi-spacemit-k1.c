@@ -694,9 +694,6 @@ static int k1_spi_probe(struct platform_device *pdev)
 				     "error mapping memory\n");
 	drv_data->base_addr = iores->start;
 
-	/* Reset registers to a known initial state */
-	k1_spi_register_reset(drv_data, true);
-
 	clk_bus = devm_clk_get_enabled(dev, "bus");
 	if (IS_ERR(clk_bus))
 		return dev_err_probe(dev, PTR_ERR(clk_bus),
@@ -712,6 +709,8 @@ static int k1_spi_probe(struct platform_device *pdev)
 	if (IS_ERR(reset))
 		return dev_err_probe(dev, PTR_ERR(reset),
 				     "error getting/deasserting reset\n");
+
+	k1_spi_register_reset(drv_data, true);
 
 	drv_data->irq = platform_get_irq(pdev, 0);
 	if (drv_data->irq < 0)
