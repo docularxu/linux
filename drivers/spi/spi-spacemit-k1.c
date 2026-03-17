@@ -188,7 +188,7 @@ static bool k1_spi_can_dma(struct spi_controller *host, struct spi_device *spi,
 	if (transfer->len < K1_SPI_THRESH * drv_data->bytes)
 		return false;
 
-	return false;
+	return true;
 }
 
 static void k1_spi_dma_callback(void *param)
