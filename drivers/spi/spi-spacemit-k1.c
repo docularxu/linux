@@ -628,8 +628,9 @@ k1_spi_dma_setup(struct k1_spi_driver_data *drv_data, struct device *dev)
 
 static void k1_spi_dma_cleanup(struct device *dev, void *res)
 {
-	struct k1_spi_driver_data *drv_data = res;
-	struct spi_controller *host;
+	struct k1_spi_driver_data **ptr = res;
+	struct k1_spi_driver_data *drv_data = *ptr;
+	struct spi_controller *host = drv_data->host;
 
 	if (!drv_data->dma_enabled)
 		return;
