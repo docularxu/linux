@@ -436,8 +436,12 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 static void
 k1_spi_handle_err(struct spi_controller *host, struct spi_message *message)
 {
-	dmaengine_terminate_sync(host->dma_rx);
-	dmaengine_terminate_sync(host->dma_tx);
+	struct k1_spi_driver_data *drv_data = spi_controller_get_devdata(host);
+
+	if (drv_data->dma_enabled) {
+		dmaengine_terminate_sync(host->dma_rx);
+		dmaengine_terminate_sync(host->dma_tx);
+	}
 }
 
 static int k1_spi_unprepare_message(struct spi_controller *ctlr,
