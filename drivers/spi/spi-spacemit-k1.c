@@ -762,12 +762,13 @@ static const struct of_device_id k1_spi_dt_ids[] = {
 MODULE_DEVICE_TABLE(of, k1_spi_dt_ids);
 
 static struct platform_driver k1_spi_driver = {
+	.probe = k1_spi_probe,
 	.driver = {
 		.name		= "k1-spi",
 		.of_match_table	= k1_spi_dt_ids,
 	},
 };
-module_platform_driver_probe(k1_spi_driver, k1_spi_probe);
+module_platform_driver(k1_spi_driver);
 
 MODULE_DESCRIPTION("SpacemiT K1 SPI controller driver");
 MODULE_LICENSE("GPL");
