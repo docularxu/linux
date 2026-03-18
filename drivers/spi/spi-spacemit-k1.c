@@ -418,7 +418,7 @@ static int k1_spi_transfer_one(struct spi_controller *host,
 	ctrl |= TOP_SSE;
 	writel(ctrl, drv_data->base + SSP_TOP_CTRL);
 
-	if (k1_spi_can_dma(host, spi, transfer))
+	if (transfer->tx_sg_mapped)
 		return k1_spi_dma_one(host, spi, transfer);
 
 	/* Clear any existing interrupt conditions */
