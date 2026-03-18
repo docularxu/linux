@@ -685,10 +685,11 @@ static int k1_spi_probe(struct platform_device *pdev)
 	drv_data->host = host;
 	platform_set_drvdata(pdev, drv_data);
 
-	/* XXX If DMA setup fails, just warn and fall back to PIO */
 	ret = devm_k1_spi_dma_setup(drv_data, dev);
+	if (ret == -EPROBE_DEFER)
+		return ret;
 	if (ret)
-		return dev_err_probe(dev, ret, "error setting up DMA\n");
+		dev_warn(dev, "DMA setup failed (%d), falling back to PIO\n", ret);
 
 	drv_data->base = devm_platform_get_and_ioremap_resource(pdev, 0,
 								&iores);
