@@ -185,10 +185,8 @@ static bool k1_spi_can_dma(struct spi_controller *host, struct spi_device *spi,
 		return false;
 
 	/* Don't bother with DMA if we can't do even a single burst */
-	if (transfer->len < K1_SPI_THRESH * drv_data->bytes)
-		return false;
-
-	return true;
+	return transfer->len >=
+	       K1_SPI_THRESH * spi_bpw_to_bytes(transfer->bits_per_word);
 }
 
 static void k1_spi_dma_callback(void *param)
