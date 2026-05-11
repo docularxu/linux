@@ -223,6 +223,32 @@ static bool hwprobe_ext0_has(const struct cpumask *cpus, u64 ext)
 	return (pair.value & ext);
 }
 
+static bool hwprobe_has_isa_base(const struct cpumask *cpus, unsigned int base)
+{
+	int cpu;
+
+	/*
+	 * F, D, C, V, Zicbom and Zicboz are RVA23U64 mandatory extensions
+	 * that the kernel enables for user mode only when every hart has
+	 * them, partly because their enable bits (sstatus.FS/VS,
+	 * senvcfg.CBCFE/CBZE) are managed across all harts rather than
+	 * per hart.
+	 */
+	if (base == RISCV_ISA_BASE_RVA23U64 &&
+	    !(has_fpu() &&
+	      riscv_isa_extension_available(NULL, C) &&
+	      has_vector() && riscv_isa_extension_available(NULL, V) &&
+	      riscv_isa_extension_available(NULL, ZICBOM) &&
+	      riscv_isa_extension_available(NULL, ZICBOZ)))
+		return false;
+
+	for_each_cpu(cpu, cpus) {
+		if (!riscv_isa_base_available(hart_isa[cpu].isa_bases, base))
+			return false;
+	}
+	return true;
+}
+
 #if defined(CONFIG_RISCV_PROBE_UNALIGNED_ACCESS)
 static u64 hwprobe_misaligned(const struct cpumask *cpus)
 {
@@ -309,12 +335,14 @@ static void hwprobe_one_pair(struct riscv_hwprobe *pair,
 		break;
 	/*
 	 * The kernel already assumes that the base single-letter ISA
-	 * extensions are supported on all harts, and only supports the
-	 * IMA base, so just cheat a bit here and tell that to
-	 * userspace.
+	 * extensions are supported on all harts, so just cheat a bit
+	 * here and tell that to userspace. Other bases are reported
+	 * only when detected.
 	 */
 	case RISCV_HWPROBE_KEY_BASE_BEHAVIOR:
 		pair->value = RISCV_HWPROBE_BASE_BEHAVIOR_IMA;
+		if (hwprobe_has_isa_base(cpus, RISCV_ISA_BASE_RVA23U64))
+			pair->value |= RISCV_HWPROBE_BASE_BEHAVIOR_RVA23U64;
 		break;
 
 	case RISCV_HWPROBE_KEY_IMA_EXT_0:
